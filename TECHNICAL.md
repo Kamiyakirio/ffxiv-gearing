@@ -1,7 +1,7 @@
 
 # 技术简介
 
-本项目是一个纯 Web 前端项目，主要使用 [TypeScript](https://www.typescriptlang.org/) 编写而成，使用 [React](https://reactjs.org/) 生成页面、[MobX-State-Tree](https://mobx-state-tree.js.org/) 管理状态、[rspack](https://rspack.dev/) 打包，视觉风格主要参考了 [Material Design](https://material.io/design) 并使用了一些 [RMWC](https://rmwc.io/) UI 组件。
+本项目是一个纯 Web 前端项目，主要使用 [TypeScript](https://www.typescriptlang.org/) 编写而成，使用 [React](https://reactjs.org/) 生成页面、[MobX-State-Tree](https://mobx-state-tree.js.org/) 管理状态、[Vite](https://vite.dev/) 构建，视觉风格主要参考了 [Material Design](https://material.io/design) 并使用了一些 [RMWC](https://rmwc.io/) UI 组件。
 
 
 ## 开发环境

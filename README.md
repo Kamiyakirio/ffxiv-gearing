@@ -37,10 +37,6 @@ https://asvel.github.io/ffxiv-gearing/
 
 配合属性阈值和伤害期望，可以更好地为绝境战、幻巧战等场景配装。
 
-#### 导入
-
-支持从一些其他配装器导入配装。
-
 ## 更新记录
 
 [CHANGELOG.md](CHANGELOG.md)

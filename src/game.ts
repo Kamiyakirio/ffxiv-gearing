@@ -1,3 +1,10 @@
+import levelCapsData from '../data/out/levelCaps.js';
+import slotCapsData from '../data/out/slotCaps.js';
+import roleCapsData from '../data/out/roleCaps.js';
+import jobCategoriesData from '../data/out/jobCategories.js';
+import syncLevelsData from '../data/out/syncLevels.js';
+import bluMdmgAdditionsData from '../data/out/bluMdmgAdditions.js';
+
 export type GearId = number & { readonly brand: unique symbol };
 
 export interface GearBase {
@@ -51,9 +58,9 @@ export type Stat = keyof typeof statNames;
 export type Stats = { [index in Stat]?: number };
 export type StatPairs = [Stat, number][];
 
-const levelCaps = require('../data/out/levelCaps').default as { [index in Stat | 'level']: number[] };
-const slotCaps = require('../data/out/slotCaps').default as { [index in Stat]: number[] };
-const roleCaps = require('../data/out/roleCaps').default as { [index in Stat]: number[] };
+const levelCaps = levelCapsData as { [index in Stat | 'level']: number[] };
+const slotCaps = slotCapsData as { [index in Stat]: number[] };
+const roleCaps = roleCapsData as { [index in Stat]: number[] };
 const levelCapsIndex: { [index: number]: number } = {};
 levelCaps.level.forEach((level, i) => {
   levelCapsIndex[level] = i;
@@ -569,7 +576,7 @@ export const jobSchemas = {
 
 export type Job = keyof typeof jobSchemas;
 
-export const jobCategories = require('../data/out/jobCategories').default as { [index in Job]?: boolean }[];
+export const jobCategories = jobCategoriesData as { [index in Job]?: boolean }[];
 
 export const statHighlight: { [index in Stat]?: boolean } = {
   PIE: true, TEN: true, DHT: true, CRT: true, DET: true, SKS: true, SPS: true,
@@ -644,7 +651,7 @@ export const clanStats: { [index in Stat]?: number[] } = {
   MND: [19, 20, 19, 21, 20, 23, 19, 23, 21, 22, 23, 18, 23, 23, 21, 22].map(x => x - 20),
 };
 
-export const syncLevels = require('../data/out/syncLevels').default as { [index in JobLevel]: number[] };
+export const syncLevels = syncLevelsData as { [index in JobLevel]: number[] };
 export const syncLevelIsPopular: { [index: number]: boolean } = {
   345: true, 375: true, 475: true, 605: true, 635: true, 735: true, 795: true,  // Ultimate Raids
   300: true, 700: true,  // Field Operations
@@ -653,4 +660,4 @@ export const syncLevelIsPopular: { [index: number]: boolean } = {
 };
 export const syncLevelOfJobLevels = { 50: 130, 60: 270, 70: 400, 80: 530, 90: 660, 100: 790 };
 
-export const bluMdmgAdditions = require('../data/out/bluMdmgAdditions').default as number[];
+export const bluMdmgAdditions = bluMdmgAdditionsData as number[];

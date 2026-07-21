@@ -1,6 +1,7 @@
 import * as mst from 'mobx-state-tree';
 import * as G from '../game';
 import * as archive from '../archive';
+import { initializeGearset } from './gearset';
 
 declare global {
   // noinspection JSUnusedGlobalSymbols
@@ -49,11 +50,11 @@ mst.onSnapshot(store, snapshot => {
   }
 });
 
-require('./gearset');
+initializeGearset();
 
 (window as any).store = store;
 (window as any).game = G;
-if (process.env.NODE_ENV === 'production') {
+if (import.meta.env.PROD) {
   mst.unprotect(store);  // Allow users manipulate store in browser console if they want.
   console.log('You can access window.store for data store of this app, and window.game for ffxiv related constants.');
 }

@@ -18,7 +18,7 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
 
   event.respondWith((async () => {
-    const matches = /^(.*\/[^\/]+\.)\w{10}(\.\w+)$/.exec(req.url);
+    const matches = /^(.*\/assets\/.*-)[\w-]{8}(\.[^/?]+)$/.exec(req.url);
     if (matches === null) {
       const res = await event.preloadResponse;
       if (res !== undefined) return res;

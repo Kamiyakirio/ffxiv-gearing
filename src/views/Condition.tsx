@@ -5,6 +5,8 @@ import classNames from 'clsx';
 import { Button } from './@rmwc/button';
 import { TextField } from './@rmwc/textfield';
 import { Badge } from './@rmwc/badge';
+import promotionImage from '../../img/BV1pt4y1W7pX.png';
+import promotionImage2x from '../../img/BV1pt4y1W7pX@2x.png';
 import { useStore } from './components/contexts';
 import { RippleLazy } from './components/RippleLazy';
 import { Icon } from './components/Icon';
@@ -15,7 +17,6 @@ import { FilterPanel } from './FilterPanel';
 import { LevelSyncPanel } from './LevelSyncPanel';
 import { MateriaOverallPanel, SubStatCalculationPanel } from './MateriaOverallPanel';
 import { SharePanel } from './SharePanel';
-import { ImportPanel } from './ImportPanel';
 import { SettingPanel } from './SettingPanel';
 
 declare const __PATCH__: string;
@@ -160,15 +161,6 @@ export const Condition = mobxReact.observer(() => {
             placement="bottom-end"
           />
         )}
-        {(welcoming || editing) && (
-          <Dropdown
-            label={({ ref, toggle }) => (
-              <Button ref={ref} className="condition_button" onClick={toggle}>导入</Button>
-            )}
-            popper={ImportPanel}
-            placement="bottom-end"
-          />
-        )}
         {viewing && (
           <Button
             className="condition_button"
@@ -200,8 +192,8 @@ export const Condition = mobxReact.observer(() => {
         >
           <img
             className="condition_welcome-promotion"
-            src={require('../../img/BV1pt4y1W7pX.png')}
-            srcSet={require('../../img/BV1pt4y1W7pX@2x.png') + ' 2x'}
+            src={promotionImage}
+            srcSet={promotionImage2x + ' 2x'}
             alt=""
           />
         </a>

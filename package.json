@@ -11,14 +11,14 @@
   "repository": "https://github.com/Asvel/ffxiv-gearing",
   "type": "module",
   "scripts": {
-    "start": "rspack serve",
-    "build": "rspack build --mode=production",
-    "analyze": "rspack build --mode=production --analyze",
+    "start": "vite",
+    "build": "tsc --project src/tsconfig.json && vite build",
+    "analyze": "vite build --mode production",
+    "preview": "vite preview",
     "publish": "node publish.ts",
     "data-fetch": "node data/fetch.ts",
     "data-convert": "node data/convert.ts",
-    "lint": "eslint --ext .js,.cjs,.ts,.tsx .",
-    "test": "playwright test -c test/"
+    "lint": "eslint --ext .js,.cjs,.ts,.tsx ."
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
@@ -32,33 +32,24 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "@rspack/cli": "^1.7.11",
-    "@rspack/core": "^1.7.11",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/shelljs": "^0.10.0",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.58.1",
+    "@vitejs/plugin-react": "^6.0.3",
     "confusing-browser-globals": "^1.0.11",
-    "css-loader": "^7.1.4",
-    "cssnano": "^7.1.4",
     "eslint": "^8.57.0",
     "eslint-config-alloy": "^5.1.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "fork-ts-checker-webpack-plugin": "^9.1.0",
     "json5": "^2.2.3",
     "papaparse": "^5.5.3",
-    "postcss": "^8.5.9",
-    "postcss-loader": "^8.2.1",
-    "postcss-preset-env": "^11.2.1",
     "sass-embedded": "^1.99.0",
-    "sass-loader": "^16.0.7",
     "shelljs": "^0.10.0",
-    "simple-functional-loader": "^1.2.1",
-    "style-loader": "^4.0.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vite": "^8.1.5"
   },
   "overrides": {
     "eslint-config-alloy": {

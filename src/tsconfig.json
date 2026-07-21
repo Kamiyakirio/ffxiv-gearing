@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "es2022",
     "module": "preserve",
-    "types": ["@rspack/core/module"],
+    "types": ["vite/client"],
+    "allowJs": true,
+    "skipLibCheck": true,
     "jsx": "react-jsx",
     "noEmit": true,
     "verbatimModuleSyntax": true,

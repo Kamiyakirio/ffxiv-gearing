@@ -1,15 +1,24 @@
 import * as mobx from 'mobx';
 import * as G from '../game';
+import foods from '../../data/out/foods.js';
+import recentGears from '../../data/out/gears-recent.js';
+import gearGroupsData from '../../data/out/gearGroups.js';
+import gearGroupBasisData from '../../data/out/gearGroupBasis.js';
 
 export const gearData = mobx.observable.map<G.GearId, G.GearBase>({}, { deep: false });
 mobx.runInAction(() => {
-  for (const item of require('../../data/out/foods').default as G.GearBase[]) {
+  for (const item of foods as unknown as G.GearBase[]) {
     gearData.set(item.id, item);
   }
-  for (const item of require('../../data/out/gears-recent').default as G.GearBase[]) {
+  for (const item of recentGears as unknown as G.GearBase[]) {
     gearData.set(item.id, item);
   }
 });
+
+const gearDataModules = import.meta.glob<{ default: G.GearBase[] }>([
+  '../../data/out/gears-*.js',
+  '!../../data/out/gears-recent.js',
+]);
 
 const gearDataLoadStatus = mobx.observable.map<string | number, 'loading' | 'finished'>({});  // TODO: handle failures
 export const gearDataLoading = mobx.computed(() => {
@@ -22,8 +31,9 @@ export const gearDataLoading = mobx.computed(() => {
 export const loadGearData = async (groupId: string | number) => {
   if (groupId === undefined || gearDataLoadStatus.has(groupId)) return;
   mobx.runInAction(() => gearDataLoadStatus.set(groupId, 'loading'));
-  const data = (await import(/* webpackChunkName: "[request]" */`../../data/out/gears-${groupId}`))
-    .default as G.GearBase[];
+  const load = gearDataModules[`../../data/out/gears-${groupId}.js`];
+  if (load === undefined) throw new Error(`Unknown gear data group: ${groupId}`);
+  const data = (await load()).default;
   console.debug(`Load gears-${groupId}.`);
   mobx.runInAction(() => {
     for (const item of data) {
@@ -35,10 +45,10 @@ export const loadGearData = async (groupId: string | number) => {
   });
 };
 
-const gearGroups = require('../../data/out/gearGroups').default as number[];
+const gearGroups = gearGroupsData as number[];
 export const loadGearDataOfGearId = (gearId: G.GearId) => loadGearData(gearGroups[gearId]);
 
-const gearGroupBasis = require('../../data/out/gearGroupBasis').default as number[];
+const gearGroupBasis = gearGroupBasisData as number[];
 export const loadGearDataOfLevelRange = (minLevel: number, maxLevel: number) => {
   let i = 0;
   while (gearGroupBasis[i + 1] <= minLevel) i++;

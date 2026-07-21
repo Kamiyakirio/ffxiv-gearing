@@ -3,6 +3,7 @@ node_modules/
 
 # Build
 /dist/
+/deprecated/
 
 # Fetched data
 /data/in/*.*
