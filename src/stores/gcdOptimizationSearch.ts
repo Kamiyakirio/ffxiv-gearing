@@ -1,4 +1,5 @@
 import * as G from '../game';
+import { getCustomWeaponRule } from '../customWeaponRules';
 import { getGearAcquisitionPolicy, progressionBudget } from './gcdOptimizationAcquisition';
 import { calcEffects, calcRequiredSpeed, floor } from './gcdOptimizationFormula';
 import type {
@@ -24,115 +25,124 @@ export type {
 } from './gcdOptimizationTypes';
 
 interface GcdGearState {
-  slot: number,
-  gearId: G.GearId,
-  stats: G.Stats,
-  materias?: GcdOptimizationMateriaPlan[],
-  planItems?: GcdOptimizationGearPlan[],
-  changeCost: number,
-  tomestoneCost?: number,
-  raidCost?: number,
+  slot: number;
+  gearId: G.GearId;
+  stats: G.Stats;
+  materias?: GcdOptimizationMateriaPlan[];
+  customStats?: G.Stats;
+  customStatAllocationKey?: string;
+  customStatLinkedSlotGroup?: string;
+  planItems?: GcdOptimizationGearPlan[];
+  changeCost: number;
+  tomestoneCost?: number;
+  raidCost?: number;
 }
 
 interface GcdPlanNode {
-  previous?: GcdPlanNode,
-  item: GcdOptimizationGearPlan,
+  previous?: GcdPlanNode;
+  item: GcdOptimizationGearPlan;
 }
 
 interface GcdCombinedState {
-  stats: G.Stats,
-  plan?: GcdPlanNode,
-  changeCost: number,
-  tomestoneCost?: number,
-  raidCost?: number,
+  stats: G.Stats;
+  plan?: GcdPlanNode;
+  changeCost: number;
+  tomestoneCost?: number;
+  raidCost?: number;
 }
 
 interface GcdMateriaState {
-  stats: G.Stats,
-  totals: G.Stats,
-  materias: GcdOptimizationMateriaPlan[],
-  changeCost: number,
+  stats: G.Stats;
+  totals: G.Stats;
+  materias: GcdOptimizationMateriaPlan[];
+  changeCost: number;
+}
+
+interface GcdAutomaticCustomStatOption {
+  stats: G.Stats;
+  allocationKey: string;
+  linkedSlotGroup?: string;
 }
 
 interface GcdSlotStateSet {
-  schemaIndex: number,
-  states: GcdGearState[],
+  schemaIndex: number;
+  states: GcdGearState[];
 }
 
 interface GcdAllGearStateSets {
-  slotStates: GcdSlotStateSet[],
-  customSkipped: boolean,
-  guaranteedBaseSpeed: number,
-  error?: string,
+  slotStates: GcdSlotStateSet[];
+  customSkipped: boolean;
+  guaranteedBaseSpeed: number;
+  error?: string;
 }
 
 interface GcdExactPlanNode {
-  previous?: GcdExactPlanNode,
-  state: GcdGearState,
+  previous?: GcdExactPlanNode;
+  state: GcdGearState;
 }
 
 interface GcdExactState {
-  values: number[],
-  dualScores: number[],
-  changeCost: number,
-  tomestoneCost?: number,
-  raidCost?: number,
-  plan?: GcdExactPlanNode,
+  values: number[];
+  dualScores: number[];
+  changeCost: number;
+  tomestoneCost?: number;
+  raidCost?: number;
+  plan?: GcdExactPlanNode;
 }
 
 interface GcdExactChoice {
-  state: GcdGearState,
-  values: number[],
-  dualScores?: number[],
+  state: GcdGearState;
+  values: number[];
+  dualScores?: number[];
 }
 
 interface GcdExactSlot {
-  schemaIndex: number,
-  choices: GcdExactChoice[],
+  schemaIndex: number;
+  choices: GcdExactChoice[];
 }
 
 interface GcdDamageDual {
-  weights: number[],
-  intercept: number,
-  slotMaximums: number[],
-  root: number,
+  weights: number[];
+  intercept: number;
+  slotMaximums: number[];
+  root: number;
 }
 
 interface GcdConstrainedDamageDual extends GcdDamageDual {
-  speedWeight: number,
+  speedWeight: number;
 }
 
 interface GcdExactBest {
-  choices: GcdExactChoice[],
-  effects: EquippedEffects,
-  stats: G.Stats,
-  food?: G.Food,
-  changeCost: number,
+  choices: GcdExactChoice[];
+  effects: EquippedEffects;
+  stats: G.Stats;
+  food?: G.Food;
+  changeCost: number;
 }
 
 interface GcdExactDamageModel {
-  attackMainStat: G.Stat,
-  weaponStat: G.Stat,
-  damageStats: G.Stat[],
-  damageIndexes: number[],
-  foods: (G.Food | undefined)[],
-  lowerBounds: number[],
-  upperBounds: number[],
-  damageMultiplier: number,
-  logConstant: number,
-  factor: (stat: G.Stat, value: number) => number,
-  logFactor: (stat: G.Stat, value: number) => number,
+  attackMainStat: G.Stat;
+  weaponStat: G.Stat;
+  damageStats: G.Stat[];
+  damageIndexes: number[];
+  foods: (G.Food | undefined)[];
+  lowerBounds: number[];
+  upperBounds: number[];
+  damageMultiplier: number;
+  logConstant: number;
+  factor: (stat: G.Stat, value: number) => number;
+  logFactor: (stat: G.Stat, value: number) => number;
 }
 
 interface GcdOptimizationContext extends GcdOptimizationInput {
-  schema: G.JobSchema,
-  gearById: Map<G.GearId, GcdOptimizationGearInput>,
-  equippedGearIdBySlot: Map<number, G.GearId>,
-  progressionPointWeaponChargeSlot?: number,
+  schema: G.JobSchema;
+  gearById: Map<G.GearId, GcdOptimizationGearInput>;
+  equippedGearIdBySlot: Map<number, G.GearId>;
+  progressionPointWeaponChargeSlot?: number;
 }
 
-export const gcdOptimizationMinTargetGcd = 1.80;
-export const gcdOptimizationMaxTargetGcd = 2.50;
+export const gcdOptimizationMinTargetGcd = 1.8;
+export const gcdOptimizationMaxTargetGcd = 2.5;
 export const gcdOptimizationMaxSpeed = 100000;
 
 const gcdOptimizationFrontierLimit = 200000;
@@ -141,8 +151,8 @@ const gcdOptimizationDamageTolerance = 1e-10;
 const gcdOptimizationBoundTolerance = 1e-10;
 
 interface ProgressionCostState {
-  tomestoneCost?: number,
-  raidCost?: number,
+  tomestoneCost?: number;
+  raidCost?: number;
 }
 
 function getTomestoneCost(state: ProgressionCostState): number {
@@ -155,12 +165,14 @@ function getRaidCost(state: ProgressionCostState): number {
 
 function isWithinProgressionBudget(ctx: GcdOptimizationContext, state: ProgressionCostState): boolean {
   if (ctx.progressionWeeks === undefined) return true;
-  return getTomestoneCost(state) <= progressionBudget.tomestonesPerWeek * ctx.progressionWeeks &&
-    getRaidCost(state) <= progressionBudget.raidTokensPerWeek * ctx.progressionWeeks;
+  return (
+    getTomestoneCost(state) <= progressionBudget.tomestonesPerWeek * ctx.progressionWeeks &&
+    getRaidCost(state) <= progressionBudget.raidTokensPerWeek * ctx.progressionWeeks
+  );
 }
 
 function isWeaponSlot(ctx: GcdOptimizationContext, slot: number): boolean {
-  return ctx.schema.slots.some(item => item.slot === slot && item.uiGroup === 'weapon');
+  return ctx.schema.slots.some((item) => item.slot === slot && item.uiGroup === 'weapon');
 }
 
 function isTomestoneGear(gear: GcdOptimizationGearInput): boolean {
@@ -193,18 +205,20 @@ function getAttackMainStat(schema: G.JobSchema): G.Stat | undefined {
 
 function addStats(a: G.Stats, b: G.Stats): G.Stats {
   const ret = { ...a };
-  for (const [ stat, value ] of Object.entries(b) as G.StatPairs) {
+  for (const [stat, value] of Object.entries(b) as G.StatPairs) {
     ret[stat] = (ret[stat] ?? 0) + value;
   }
   return ret;
 }
 
-function getSyncedLevel(gear: G.Gear, jobLevel: G.JobLevel, syncLevel=Infinity): number | undefined {
+function getSyncedLevel(gear: G.Gear, jobLevel: G.JobLevel, syncLevel = Infinity): number | undefined {
   if (syncLevel >= gear.level && jobLevel >= gear.equipLevel) return undefined;
   const jobLevelSyncedLevel = Math.min(gear.level, G.syncLevelOfJobLevels[jobLevel]);
   return gear.equipLevelVariable
     ? Math.min(syncLevel, jobLevelSyncedLevel)
-    : syncLevel < gear.level ? syncLevel : jobLevelSyncedLevel;
+    : syncLevel < gear.level
+      ? syncLevel
+      : jobLevelSyncedLevel;
 }
 
 function concretizeStat(stat: G.Stat, schema: G.JobSchema): G.Stat {
@@ -219,9 +233,9 @@ function getGearBaseStats(
   jobLevel: G.JobLevel,
   syncLevel: number | undefined,
   customStats?: G.Stats,
-): { stats: G.Stats, syncedLevel?: number } {
+): { stats: G.Stats; syncedLevel?: number } {
   const stats: G.Stats = {};
-  for (const [ stat, value ] of Object.entries(gear.stats) as G.StatPairs) {
+  for (const [stat, value] of Object.entries(gear.stats) as G.StatPairs) {
     stats[concretizeStat(stat, schema)] = value;
   }
   if (gear.customizable) {
@@ -230,11 +244,11 @@ function getGearBaseStats(
   const syncedLevel = getSyncedLevel(gear, jobLevel, syncLevel);
   if (syncedLevel !== undefined) {
     const caps = G.getCaps(gear, syncedLevel);
-    for (const [ stat, value ] of Object.entries(stats) as G.StatPairs) {
+    for (const [stat, value] of Object.entries(stats) as G.StatPairs) {
       stats[stat] = Math.min(value, caps[stat]!);
     }
     if (syncedLevel === 700 && gear.occultStats !== undefined) {
-      for (const [ stat, value ] of Object.entries(gear.occultStats) as G.StatPairs) {
+      for (const [stat, value] of Object.entries(gear.occultStats) as G.StatPairs) {
         const concreteStat = concretizeStat(stat, schema);
         stats[concreteStat] = (stats[concreteStat] ?? 0) + value;
       }
@@ -249,27 +263,55 @@ function getMateriaSlotCount(gear: G.Gear): number {
 
 function getDefaultMateriaGrades(gear: G.Gear, materiaIndex: number): G.MateriaGrade[] {
   const canRestricted = materiaIndex <= gear.materiaSlot;
-  return G.materiaGrades.slice(0, 2).filter(grade =>
-    gear.level >= G.materiaGradeRequiredLevels[grade - 1] &&
-    (canRestricted || !G.materiaGradeIsRestricted[grade]));
+  return G.materiaGrades
+    .filter(
+      (grade) =>
+        gear.level >= G.materiaGradeRequiredLevels[grade - 1] && (canRestricted || !G.materiaGradeIsRestricted[grade]),
+    )
+    .slice(0, 2);
 }
 
-function getCandidateMateriaStats(
-  schema: G.JobSchema,
-  speedStat: G.Stat,
-  skipSpeedMateria=false,
-): G.Stat[] {
+function getCandidateMateriaStats(schema: G.JobSchema, speedStat: G.Stat, skipSpeedMateria = false): G.Stat[] {
   const stats = ['CRT', 'DET', 'DHT', speedStat] as G.Stat[];
   if (schema.stats.includes('TEN')) {
     stats.push('TEN');
   }
-  return Array.from(new Set(stats)).filter(stat =>
-    schema.stats.includes(stat) && stat in G.materias && (!skipSpeedMateria || stat !== speedStat));
+  return Array.from(new Set(stats)).filter(
+    (stat) => schema.stats.includes(stat) && stat in G.materias && (!skipSpeedMateria || stat !== speedStat),
+  );
+}
+
+function getAutomaticCustomStatOptions(schema: G.JobSchema, gear: G.Gear): GcdAutomaticCustomStatOption[] | undefined {
+  const rule = getCustomWeaponRule(gear, schema);
+  if (rule === undefined) return;
+  const candidates = rule.statCandidates;
+  if (candidates.length < 3) return;
+  const options: GcdAutomaticCustomStatOption[] = [];
+  for (let firstIndex = 0; firstIndex < candidates.length; firstIndex++) {
+    for (let secondIndex = firstIndex + 1; secondIndex < candidates.length; secondIndex++) {
+      const first = candidates[firstIndex];
+      const second = candidates[secondIndex];
+      for (const minor of candidates) {
+        if (minor === first || minor === second) continue;
+        options.push({
+          stats: { [first]: rule.major, [second]: rule.major, [minor]: rule.minor },
+          allocationKey: `${first},${second};${minor}`,
+          linkedSlotGroup: rule.linkedSlotGroup,
+        });
+      }
+    }
+  }
+  return options;
+}
+
+function areStatsEqual(a: G.Stats | undefined, b: G.Stats): boolean {
+  const stats = new Set([...Object.keys(a ?? {}), ...Object.keys(b)] as G.Stat[]);
+  return Array.from(stats).every((stat) => (a?.[stat] ?? 0) === (b[stat] ?? 0));
 }
 
 function applyMateriaStats(baseStats: G.Stats, materiaStats: G.Stats, caps: G.Stats): G.Stats {
   const stats = { ...baseStats };
-  for (const [ stat, value ] of Object.entries(materiaStats) as G.StatPairs) {
+  for (const [stat, value] of Object.entries(materiaStats) as G.StatPairs) {
     const base = stats[stat] ?? 0;
     stats[stat] = Math.min(base + value, Math.max(base, caps[stat] ?? Infinity));
   }
@@ -286,30 +328,20 @@ function getRelevantStats(schema: G.JobSchema, speedStat: G.Stat): G.Stat[] {
   return Array.from(new Set(stats));
 }
 
-function getComparableStatValue(
-  stats: G.Stats,
-  stat: G.Stat,
-  speedStat: G.Stat,
-  requiredSpeed: number,
-): number {
+function getComparableStatValue(stats: G.Stats, stat: G.Stat, speedStat: G.Stat, requiredSpeed: number): number {
   const value = stats[stat] ?? 0;
   return stat === speedStat ? Math.min(value, requiredSpeed) : value;
 }
 
-function getPruneKey(
-  stats: G.Stats,
-  relevantStats: G.Stat[],
-  speedStat: G.Stat,
-  requiredSpeed: number,
-): string {
-  return relevantStats.map(stat => getComparableStatValue(stats, stat, speedStat, requiredSpeed)).join(',');
+function getPruneKey(stats: G.Stats, relevantStats: G.Stat[], speedStat: G.Stat, requiredSpeed: number): string {
+  return relevantStats.map((stat) => getComparableStatValue(stats, stat, speedStat, requiredSpeed)).join(',');
 }
 
 function getSpeedOverflow(stats: G.Stats, speedStat: G.Stat, requiredSpeed: number): number {
   return Math.max(0, (stats[speedStat] ?? 0) - requiredSpeed);
 }
 
-function shouldReplaceSamePruneKey<T extends { stats: G.Stats, changeCost: number } & ProgressionCostState>(
+function shouldReplaceSamePruneKey<T extends { stats: G.Stats; changeCost: number } & ProgressionCostState>(
   state: T,
   existing: T,
   speedStat: G.Stat,
@@ -317,16 +349,16 @@ function shouldReplaceSamePruneKey<T extends { stats: G.Stats, changeCost: numbe
 ): boolean {
   const overflow = getSpeedOverflow(state.stats, speedStat, requiredSpeed);
   const existingOverflow = getSpeedOverflow(existing.stats, speedStat, requiredSpeed);
-  return overflow < existingOverflow || overflow === existingOverflow && state.changeCost < existing.changeCost;
+  return overflow < existingOverflow || (overflow === existingOverflow && state.changeCost < existing.changeCost);
 }
 
-function addUniqueState<T extends { stats: G.Stats, changeCost: number } & ProgressionCostState>(
+function addUniqueState<T extends { stats: G.Stats; changeCost: number } & ProgressionCostState>(
   unique: Map<string, T>,
   state: T,
   relevantStats: G.Stat[],
   speedStat: G.Stat,
   requiredSpeed: number,
-  key=`${getPruneKey(state.stats, relevantStats, speedStat, requiredSpeed)};` +
+  key = `${getPruneKey(state.stats, relevantStats, speedStat, requiredSpeed)};` +
     `${getTomestoneCost(state)},${getRaidCost(state)}`,
 ): void {
   const existing = unique.get(key);
@@ -335,7 +367,7 @@ function addUniqueState<T extends { stats: G.Stats, changeCost: number } & Progr
   }
 }
 
-function deduplicateStates<T extends { stats: G.Stats, changeCost: number } & ProgressionCostState>(
+function deduplicateStates<T extends { stats: G.Stats; changeCost: number } & ProgressionCostState>(
   states: Iterable<T>,
   relevantStats: G.Stat[],
   speedStat: G.Stat,
@@ -348,7 +380,7 @@ function deduplicateStates<T extends { stats: G.Stats, changeCost: number } & Pr
   return Array.from(unique.values());
 }
 
-function pruneUniqueStates<T extends { stats: G.Stats, changeCost: number } & ProgressionCostState>(
+function pruneUniqueStates<T extends { stats: G.Stats; changeCost: number } & ProgressionCostState>(
   states: T[],
   relevantStats: G.Stat[],
   speedStat: G.Stat,
@@ -356,7 +388,8 @@ function pruneUniqueStates<T extends { stats: G.Stats, changeCost: number } & Pr
 ): T[] {
   const sorted = states.sort((a, b) => {
     for (const stat of relevantStats) {
-      const diff = getComparableStatValue(b.stats, stat, speedStat, requiredSpeed) -
+      const diff =
+        getComparableStatValue(b.stats, stat, speedStat, requiredSpeed) -
         getComparableStatValue(a.stats, stat, speedStat, requiredSpeed);
       if (diff !== 0) return diff;
     }
@@ -366,12 +399,12 @@ function pruneUniqueStates<T extends { stats: G.Stats, changeCost: number } & Pr
     if (raidDiff !== 0) return raidDiff;
     return a.changeCost - b.changeCost;
   });
-  const otherStats = relevantStats.filter(stat => stat !== speedStat);
+  const otherStats = relevantStats.filter((stat) => stat !== speedStat);
   return filterParetoFrontier(
     sorted,
-    state => getComparableStatValue(state.stats, speedStat, speedStat, requiredSpeed),
-    state => [
-      ...otherStats.map(stat => state.stats[stat] ?? 0),
+    (state) => getComparableStatValue(state.stats, speedStat, speedStat, requiredSpeed),
+    (state) => [
+      ...otherStats.map((stat) => state.stats[stat] ?? 0),
       -getSpeedOverflow(state.stats, speedStat, requiredSpeed),
       -getTomestoneCost(state),
       -getRaidCost(state),
@@ -381,9 +414,7 @@ function pruneUniqueStates<T extends { stats: G.Stats, changeCost: number } & Pr
   );
 }
 
-export function pruneGcdOptimizationStates<
-  T extends { stats: G.Stats, changeCost: number } & ProgressionCostState,
->(
+export function pruneGcdOptimizationStates<T extends { stats: G.Stats; changeCost: number } & ProgressionCostState>(
   states: Iterable<T>,
   relevantStats: G.Stat[],
   speedStat: G.Stat,
@@ -399,12 +430,30 @@ export function pruneGcdOptimizationStates<
   );
 }
 
+function pruneCustomStatAllocationStates(
+  states: GcdGearState[],
+  relevantStats: G.Stat[],
+  speedStat: G.Stat,
+  requiredSpeed: number,
+): GcdGearState[] {
+  const statesByAllocation = new Map<string, GcdGearState[]>();
+  for (const state of states) {
+    const key = state.customStatAllocationKey ?? '';
+    const allocationStates = statesByAllocation.get(key) ?? [];
+    allocationStates.push(state);
+    statesByAllocation.set(key, allocationStates);
+  }
+  return Array.from(statesByAllocation.values()).flatMap((allocationStates) =>
+    pruneGcdOptimizationStates(allocationStates, relevantStats, speedStat, requiredSpeed),
+  );
+}
+
 function getFoodEffectiveStats(stats: G.Stats, food?: G.Food): G.Stats {
   if (food === undefined) return {};
   const ret: G.Stats = {};
   for (const stat of Object.keys(food.stats) as G.Stat[]) {
     if (stat in food.statRates) {
-      ret[stat] = Math.min(food.stats[stat]!, floor((stats[stat] ?? 0) * food.statRates[stat]! / 100));
+      ret[stat] = Math.min(food.stats[stat]!, floor(((stats[stat] ?? 0) * food.statRates[stat]!) / 100));
     } else {
       ret[stat] = food.stats[stat];
     }
@@ -421,6 +470,17 @@ function getGearChangeCost(currentGear: GcdOptimizationGearInput | undefined, ge
   return currentGear?.id === gear.id ? 0 : 100000;
 }
 
+function getGearMinimumBaseStat(ctx: GcdOptimizationContext, gear: GcdOptimizationGearInput, stat: G.Stat): number {
+  const automaticOptions = getAutomaticCustomStatOptions(ctx.schema, gear.data);
+  const customStatOptions = automaticOptions?.map((option) => option.stats) ?? [gear.customStats];
+  return Math.min(
+    ...customStatOptions.map(
+      (customStats) =>
+        getGearBaseStats(gear.data, ctx.schema, ctx.jobLevel, ctx.syncLevel, customStats).stats[stat] ?? 0,
+    ),
+  );
+}
+
 function getGearStates(
   ctx: GcdOptimizationContext,
   gear: GcdOptimizationGearInput,
@@ -430,14 +490,37 @@ function getGearStates(
   currentGear: GcdOptimizationGearInput | undefined,
   skipUnconfiguredCustomStats: boolean,
   skipSpeedMateria: boolean,
-): { states: GcdGearState[], customSkipped: boolean } {
+): { states: GcdGearState[]; customSkipped: boolean } {
   const data = gear.data;
-  if (skipUnconfiguredCustomStats && data.customizable && Object.keys(gear.customStats ?? {}).length === 0) {
+  const automaticCustomStatOptions = getAutomaticCustomStatOptions(ctx.schema, data);
+  if (
+    skipUnconfiguredCustomStats &&
+    automaticCustomStatOptions === undefined &&
+    data.customizable &&
+    Object.keys(gear.customStats ?? {}).length === 0
+  ) {
     return { states: [], customSkipped: true };
   }
 
   const baseChangeCost = getGearChangeCost(currentGear, gear);
   const progressionCosts = getGearProgressionCosts(ctx, gear);
+  if (automaticCustomStatOptions !== undefined) {
+    const states = automaticCustomStatOptions.map((option) => ({
+      slot: gear.slot,
+      gearId: gear.id,
+      stats: getGearBaseStats(data, ctx.schema, ctx.jobLevel, ctx.syncLevel, option.stats).stats,
+      customStats: option.stats,
+      customStatAllocationKey: option.allocationKey,
+      customStatLinkedSlotGroup: option.linkedSlotGroup,
+      changeCost:
+        baseChangeCost + (currentGear?.id === gear.id && !areStatsEqual(currentGear.customStats, option.stats) ? 1 : 0),
+      ...progressionCosts,
+    }));
+    return {
+      customSkipped: false,
+      states: pruneCustomStatAllocationStates(states, relevantStats, speedStat, requiredSpeed),
+    };
+  }
   const { stats: syncedStats, syncedLevel } = getGearBaseStats(
     data,
     ctx.schema,
@@ -449,13 +532,15 @@ function getGearStates(
   if (syncedLevel !== undefined || materiaSlotCount === 0) {
     return {
       customSkipped: false,
-      states: [{
-        slot: gear.slot,
-        gearId: gear.id,
-        stats: syncedStats,
-        changeCost: baseChangeCost,
-        ...progressionCosts,
-      }],
+      states: [
+        {
+          slot: gear.slot,
+          gearId: gear.id,
+          stats: syncedStats,
+          changeCost: baseChangeCost,
+          ...progressionCosts,
+        },
+      ],
     };
   }
 
@@ -464,16 +549,23 @@ function getGearStates(
   const options = Array.from({ length: materiaSlotCount }, (_, index) => {
     const slotOptions: GcdOptimizationMateriaPlan[] = [
       {},
-      ...getDefaultMateriaGrades(data, index).flatMap(grade =>
-        candidateMateriaStats.map(stat => ({ stat, grade }))),
+      ...getDefaultMateriaGrades(data, index).flatMap((grade) =>
+        candidateMateriaStats.map((stat) => ({ stat, grade })),
+      ),
     ];
     const current = currentMaterias[index];
     if (current?.stat !== undefined && current.grade !== undefined) slotOptions.push({ ...current });
-    return Array.from(new Map(slotOptions.map(option =>
-      [`${option.stat ?? ''}:${option.grade ?? ''}`, option])).values());
+    return Array.from(
+      new Map(slotOptions.map((option) => [`${option.stat ?? ''}:${option.grade ?? ''}`, option])).values(),
+    );
   });
-  const mutableStats = Array.from(new Set(options.flatMap(slotOptions =>
-    slotOptions.flatMap(option => option.stat === undefined ? [] : [option.stat]))));
+  const mutableStats = Array.from(
+    new Set(
+      options.flatMap((slotOptions) =>
+        slotOptions.flatMap((option) => (option.stat === undefined ? [] : [option.stat])),
+      ),
+    ),
+  );
   const caps = G.getCaps(data);
   let materiaStates = new Map<string, GcdMateriaState>();
   materiaStates.set('', { stats: syncedStats, totals: {}, materias: [], changeCost: 0 });
@@ -488,9 +580,9 @@ function getGearStates(
         const stats = applyMateriaStats(syncedStats, totals, caps);
         const materias = state.materias.concat({ stat: option.stat, grade: option.grade });
         const current = currentMaterias[index];
-        const changeCost = state.changeCost +
-          (current?.stat === option.stat && current?.grade === option.grade ? 0 : 1);
-        const key = mutableStats.map(stat => stats[stat] ?? 0).join(',');
+        const changeCost =
+          state.changeCost + (current?.stat === option.stat && current?.grade === option.grade ? 0 : 1);
+        const key = mutableStats.map((stat) => stats[stat] ?? 0).join(',');
         const existing = nextStates.get(key);
         if (existing === undefined || changeCost < existing.changeCost) {
           nextStates.set(key, { stats, totals, materias, changeCost });
@@ -500,7 +592,7 @@ function getGearStates(
     materiaStates = nextStates;
   }
 
-  const states = Array.from(materiaStates.values(), state => ({
+  const states = Array.from(materiaStates.values(), (state) => ({
     slot: gear.slot,
     gearId: gear.id,
     stats: state.stats,
@@ -534,17 +626,19 @@ function combineFrontier(
       const tomestoneCost = getTomestoneCost(frontierState) + getTomestoneCost(gearState);
       const raidCost = getRaidCost(frontierState) + getRaidCost(gearState);
       if (!isWithinProgressionBudget(ctx, { tomestoneCost, raidCost })) continue;
-      const key = `${relevantStats.map(stat => {
-        const value = (frontierState.stats[stat] ?? 0) + (gearState.stats[stat] ?? 0);
-        return stat === speedStat ? Math.min(value, requiredSpeed) : value;
-      }).join(',')};${tomestoneCost},${raidCost}`;
+      const key = `${relevantStats
+        .map((stat) => {
+          const value = (frontierState.stats[stat] ?? 0) + (gearState.stats[stat] ?? 0);
+          return stat === speedStat ? Math.min(value, requiredSpeed) : value;
+        })
+        .join(',')};${tomestoneCost},${raidCost}`;
       const existing = combined.get(key);
       const overflow = Math.max(0, speed - requiredSpeed);
       if (
         existing !== undefined &&
         (overflow > getSpeedOverflow(existing.stats, speedStat, requiredSpeed) ||
-          overflow === getSpeedOverflow(existing.stats, speedStat, requiredSpeed) &&
-          changeCost >= existing.changeCost)
+          (overflow === getSpeedOverflow(existing.stats, speedStat, requiredSpeed) &&
+            changeCost >= existing.changeCost))
       ) {
         continue;
       }
@@ -561,7 +655,16 @@ function combineFrontier(
 }
 
 function getGearStatePlanItems(state: GcdGearState): GcdOptimizationGearPlan[] {
-  return state.planItems ?? [{ slot: state.slot, gearId: state.gearId, materias: state.materias }];
+  return (
+    state.planItems ?? [
+      {
+        slot: state.slot,
+        gearId: state.gearId,
+        materias: state.materias,
+        customStats: state.customStats,
+      },
+    ]
+  );
 }
 
 function appendGearStatePlan(plan: GcdPlanNode | undefined, state: GcdGearState): GcdPlanNode | undefined {
@@ -572,10 +675,7 @@ function appendGearStatePlan(plan: GcdPlanNode | undefined, state: GcdGearState)
   return next;
 }
 
-function getNonrepeatableRingGroup(
-  ctx: GcdOptimizationContext,
-  state: GcdGearState,
-): string | undefined {
+function getNonrepeatableRingGroup(ctx: GcdOptimizationContext, state: GcdGearState): string | undefined {
   const source = ctx.gearById.get(state.gearId)?.data.source;
   return getGearAcquisitionPolicy(source, state.slot, false, false).ringExclusivityGroup;
 }
@@ -612,6 +712,70 @@ function combineRingSlotStates(
   };
 }
 
+function combineCustomWeaponSlotStates(
+  first: GcdSlotStateSet,
+  second: GcdSlotStateSet,
+  relevantStats: G.Stat[],
+  speedStat: G.Stat,
+  requiredSpeed: number,
+): GcdSlotStateSet {
+  const states: GcdGearState[] = [];
+  for (const firstState of first.states) {
+    for (const secondState of second.states) {
+      if (
+        firstState.customStatLinkedSlotGroup !== undefined &&
+        firstState.customStatLinkedSlotGroup === secondState.customStatLinkedSlotGroup &&
+        firstState.customStatAllocationKey !== undefined &&
+        secondState.customStatAllocationKey !== undefined &&
+        firstState.customStatAllocationKey !== secondState.customStatAllocationKey
+      )
+        continue;
+      states.push({
+        slot: firstState.slot,
+        gearId: firstState.gearId,
+        stats: addStats(firstState.stats, secondState.stats),
+        planItems: getGearStatePlanItems(firstState).concat(getGearStatePlanItems(secondState)),
+        changeCost: firstState.changeCost + secondState.changeCost,
+        tomestoneCost: getTomestoneCost(firstState) + getTomestoneCost(secondState),
+        raidCost: getRaidCost(firstState) + getRaidCost(secondState),
+      });
+    }
+  }
+  return {
+    schemaIndex: Math.min(first.schemaIndex, second.schemaIndex),
+    states: pruneGcdOptimizationStates(states, relevantStats, speedStat, requiredSpeed),
+  };
+}
+
+function combineCustomWeaponSlotStateSets(
+  ctx: GcdOptimizationContext,
+  slotStates: GcdSlotStateSet[],
+  relevantStats: G.Stat[],
+  speedStat: G.Stat,
+  requiredSpeed: number,
+): void {
+  const customWeaponSlots = slotStates.filter(
+    (slot) =>
+      ctx.schema.slots[slot.schemaIndex]?.uiGroup === 'weapon' &&
+      slot.states.some((state) => state.customStatAllocationKey !== undefined),
+  );
+  if (customWeaponSlots.length !== 2) return;
+  const combinedWeapons = combineCustomWeaponSlotStates(
+    customWeaponSlots[0],
+    customWeaponSlots[1],
+    relevantStats,
+    speedStat,
+    requiredSpeed,
+  );
+  const weaponSlotStateSet = new Set(customWeaponSlots);
+  slotStates.splice(
+    0,
+    slotStates.length,
+    ...slotStates.filter((slot) => !weaponSlotStateSet.has(slot)),
+    combinedWeapons,
+  );
+}
+
 function pruneRingSlotStates(
   ctx: GcdOptimizationContext,
   states: GcdGearState[],
@@ -626,8 +790,9 @@ function pruneRingSlotStates(
     sourceStates.push(state);
     statesBySource.set(source, sourceStates);
   }
-  return Array.from(statesBySource.values()).flatMap(sourceStates =>
-    pruneGcdOptimizationStates(sourceStates, relevantStats, speedStat, requiredSpeed));
+  return Array.from(statesBySource.values()).flatMap((sourceStates) =>
+    pruneGcdOptimizationStates(sourceStates, relevantStats, speedStat, requiredSpeed),
+  );
 }
 
 function createCurrentGearFrontier(
@@ -635,20 +800,21 @@ function createCurrentGearFrontier(
   speedStat: G.Stat,
   requiredSpeed: number,
   relevantStats: G.Stat[],
-): { frontier: GcdCombinedState[], customSkipped: boolean } {
+): { frontier: GcdCombinedState[]; customSkipped: boolean } {
   let frontier: GcdCombinedState[] = [{ stats: ctx.baseStats, changeCost: 0 }];
   let customSkipped = false;
   const equippedGears: GcdOptimizationGearInput[] = [];
-  for (const [ slot, gearId ] of ctx.equippedGearIdsBySlot) {
+  for (const [slot, gearId] of ctx.equippedGearIdsBySlot) {
     if (slot === -1 || slot === -2) continue;
     const gear = ctx.gearById.get(gearId);
     if (gear === undefined) continue;
     equippedGears.push(gear);
   }
-  const baseSpeed = (ctx.baseStats[speedStat] ?? 0) + equippedGears.reduce((total, gear) =>
-    total + (getGearBaseStats(gear.data, ctx.schema, ctx.jobLevel, ctx.syncLevel, gear.customStats)
-      .stats[speedStat] ?? 0), 0);
+  const baseSpeed =
+    (ctx.baseStats[speedStat] ?? 0) +
+    equippedGears.reduce((total, gear) => total + getGearMinimumBaseStat(ctx, gear, speedStat), 0);
   const skipSpeedMateria = baseSpeed >= requiredSpeed;
+  const slotStates: GcdSlotStateSet[] = [];
   for (const gear of equippedGears) {
     const { states, customSkipped: skipped } = getGearStates(
       ctx,
@@ -661,7 +827,12 @@ function createCurrentGearFrontier(
       skipSpeedMateria,
     );
     customSkipped ||= skipped;
-    frontier = combineFrontier(ctx, frontier, states, relevantStats, speedStat, requiredSpeed);
+    const schemaIndex = ctx.schema.slots.findIndex((slot) => slot.slot === gear.slot);
+    slotStates.push({ schemaIndex, states });
+  }
+  combineCustomWeaponSlotStateSets(ctx, slotStates, relevantStats, speedStat, requiredSpeed);
+  for (const slot of slotStates) {
+    frontier = combineFrontier(ctx, frontier, slot.states, relevantStats, speedStat, requiredSpeed);
   }
   return { frontier, customSkipped };
 }
@@ -673,7 +844,7 @@ function createAllGearStateSets(
   relevantStats: G.Stat[],
 ): GcdAllGearStateSets {
   let customSkipped = false;
-  const slots: { schemaIndex: number, slot: G.SlotSchema, gears: GcdOptimizationGearInput[] }[] = [];
+  const slots: { schemaIndex: number; slot: G.SlotSchema; gears: GcdOptimizationGearInput[] }[] = [];
   for (let schemaIndex = 0; schemaIndex < ctx.schema.slots.length; schemaIndex++) {
     const slot = ctx.schema.slots[schemaIndex];
     if (slot.slot === -1 || slot.slot === -2) continue;
@@ -681,7 +852,11 @@ function createAllGearStateSets(
     for (const gearId of ctx.filteredIds) {
       const gear = ctx.gearById.get(gearId);
       if (gear === undefined || gear.slot !== slot.slot) continue;
-      if (gear.data.customizable && Object.keys(gear.customStats ?? {}).length === 0) {
+      if (
+        gear.data.customizable &&
+        getAutomaticCustomStatOptions(ctx.schema, gear.data) === undefined &&
+        Object.keys(gear.customStats ?? {}).length === 0
+      ) {
         customSkipped = true;
         continue;
       }
@@ -699,11 +874,12 @@ function createAllGearStateSets(
   }
 
   if (ctx.progressionWeeks !== undefined) {
-    const weaponSlots = slots.filter(item => item.slot.uiGroup === 'weapon');
-    const pointWeaponsBySlot = weaponSlots.map(item => item.gears.filter(isTomestoneGear));
-    const otherWeaponsBySlot = weaponSlots.map(item => item.gears.filter(gear => !isTomestoneGear(gear)));
-    const forcePointWeapon = weaponSlots.length > 0 && weaponSlots.every((_, index) =>
-      pointWeaponsBySlot[index].length === 1 && otherWeaponsBySlot[index].length === 0);
+    const weaponSlots = slots.filter((item) => item.slot.uiGroup === 'weapon');
+    const pointWeaponsBySlot = weaponSlots.map((item) => item.gears.filter(isTomestoneGear));
+    const otherWeaponsBySlot = weaponSlots.map((item) => item.gears.filter((gear) => !isTomestoneGear(gear)));
+    const forcePointWeapon =
+      weaponSlots.length > 0 &&
+      weaponSlots.every((_, index) => pointWeaponsBySlot[index].length === 1 && otherWeaponsBySlot[index].length === 0);
     if (forcePointWeapon) {
       const availableTomestones = progressionBudget.tomestonesPerWeek * ctx.progressionWeeks;
       if (availableTomestones < progressionBudget.pointWeaponCost) {
@@ -711,7 +887,8 @@ function createAllGearStateSets(
           slotStates: [],
           customSkipped,
           guaranteedBaseSpeed: 0,
-          error: `准备 ${ctx.progressionWeeks} 周只有 ${availableTomestones} 点数，` +
+          error:
+            `准备 ${ctx.progressionWeeks} 周只有 ${availableTomestones} 点数，` +
             `不足以购买需要 ${progressionBudget.pointWeaponCost} 点数的武器。`,
         };
       }
@@ -721,8 +898,9 @@ function createAllGearStateSets(
       for (let index = 0; index < weaponSlots.length; index++) {
         weaponSlots[index].gears = otherWeaponsBySlot[index];
         if (weaponSlots[index].gears.length > 0) continue;
-        const onlyPointWeapons = pointWeaponsBySlot.every((pointWeapons, pointIndex) =>
-          pointWeapons.length > 0 && otherWeaponsBySlot[pointIndex].length === 0);
+        const onlyPointWeapons = pointWeaponsBySlot.every(
+          (pointWeapons, pointIndex) => pointWeapons.length > 0 && otherWeaponsBySlot[pointIndex].length === 0,
+        );
         return {
           slotStates: [],
           customSkipped,
@@ -735,10 +913,12 @@ function createAllGearStateSets(
     }
   }
 
-  const guaranteedBaseSpeed = (ctx.baseStats[speedStat] ?? 0) + slots.reduce((total, slot) =>
-    total + Math.min(...slot.gears.map(gear =>
-      getGearBaseStats(gear.data, ctx.schema, ctx.jobLevel, ctx.syncLevel, gear.customStats)
-        .stats[speedStat] ?? 0)), 0);
+  const guaranteedBaseSpeed =
+    (ctx.baseStats[speedStat] ?? 0) +
+    slots.reduce(
+      (total, slot) => total + Math.min(...slot.gears.map((gear) => getGearMinimumBaseStat(ctx, gear, speedStat))),
+      0,
+    );
   const skipSpeedMateria = guaranteedBaseSpeed >= requiredSpeed;
   const slotStates: GcdSlotStateSet[] = [];
   for (const { schemaIndex, slot, gears } of slots) {
@@ -759,12 +939,15 @@ function createAllGearStateSets(
     }
     slotStates.push({
       schemaIndex,
-      states: Math.abs(slot.slot) === 12
-        ? pruneRingSlotStates(ctx, gearStates, relevantStats, speedStat, requiredSpeed)
-        : pruneGcdOptimizationStates(gearStates, relevantStats, speedStat, requiredSpeed),
+      states:
+        Math.abs(slot.slot) === 12
+          ? pruneRingSlotStates(ctx, gearStates, relevantStats, speedStat, requiredSpeed)
+          : gearStates.some((state) => state.customStatAllocationKey !== undefined)
+            ? pruneCustomStatAllocationStates(gearStates, relevantStats, speedStat, requiredSpeed)
+            : pruneGcdOptimizationStates(gearStates, relevantStats, speedStat, requiredSpeed),
     });
   }
-  const ringSlotStates = slotStates.filter(slot => Math.abs(ctx.schema.slots[slot.schemaIndex].slot) === 12);
+  const ringSlotStates = slotStates.filter((slot) => Math.abs(ctx.schema.slots[slot.schemaIndex].slot) === 12);
   if (ringSlotStates.length === 2) {
     const combinedRings = combineRingSlotStates(
       ctx,
@@ -783,8 +966,9 @@ function createAllGearStateSets(
       };
     }
     const ringSlotStateSet = new Set(ringSlotStates);
-    slotStates.splice(0, slotStates.length, ...slotStates.filter(slot => !ringSlotStateSet.has(slot)), combinedRings);
+    slotStates.splice(0, slotStates.length, ...slotStates.filter((slot) => !ringSlotStateSet.has(slot)), combinedRings);
   }
+  combineCustomWeaponSlotStateSets(ctx, slotStates, relevantStats, speedStat, requiredSpeed);
   slotStates.sort((a, b) => a.states.length - b.states.length || a.schemaIndex - b.schemaIndex);
   return { slotStates, customSkipped, guaranteedBaseSpeed };
 }
@@ -798,19 +982,12 @@ function combineAllGearStateSets(
 ): GcdCombinedState[] {
   let frontier: GcdCombinedState[] = [{ stats: ctx.baseStats, changeCost: 0 }];
   for (const slot of slotStates) {
-    frontier = combineFrontier(
-      ctx,
-      frontier,
-      slot.states,
-      relevantStats,
-      speedStat,
-      requiredSpeed,
-    );
+    frontier = combineFrontier(ctx, frontier, slot.states, relevantStats, speedStat, requiredSpeed);
   }
   return frontier;
 }
 
-function getFoodStat(food: G.Food | undefined, stat: G.Stat): { value: number, rate?: number } {
+function getFoodStat(food: G.Food | undefined, stat: G.Stat): { value: number; rate?: number } {
   return {
     value: food?.stats[stat] ?? 0,
     rate: food !== undefined && stat in food.statRates ? food.statRates[stat] : undefined,
@@ -851,20 +1028,25 @@ function foodAlwaysDominates(
   if (candidateCost === foodCost && candidateId > foodId) return false;
   if (candidateCost === foodCost && candidateId === foodId && candidateIndex > foodIndex) return false;
   const stats = new Set<G.Stat>([
-    ...Object.keys(candidate?.stats ?? {}) as G.Stat[],
-    ...Object.keys(candidate?.statRates ?? {}) as G.Stat[],
-    ...Object.keys(food?.stats ?? {}) as G.Stat[],
-    ...Object.keys(food?.statRates ?? {}) as G.Stat[],
+    ...(Object.keys(candidate?.stats ?? {}) as G.Stat[]),
+    ...(Object.keys(candidate?.statRates ?? {}) as G.Stat[]),
+    ...(Object.keys(food?.stats ?? {}) as G.Stat[]),
+    ...(Object.keys(food?.statRates ?? {}) as G.Stat[]),
   ]);
-  return Array.from(stats).every(stat => isFoodStatAlwaysAtLeast(candidate, food, stat));
+  return Array.from(stats).every((stat) => isFoodStatAlwaysAtLeast(candidate, food, stat));
 }
 
 function getFoodCandidates(ctx: GcdOptimizationContext, speedStat: G.Stat): (G.Food | undefined)[] {
   const foods: (G.Food | undefined)[] = [undefined, ...ctx.foods];
   foods.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0));
-  return foods.filter((food, foodIndex) => !foods.some((candidate, candidateIndex) =>
-    candidateIndex !== foodIndex &&
-    foodAlwaysDominates(ctx, candidate, food, speedStat, candidateIndex, foodIndex)));
+  return foods.filter(
+    (food, foodIndex) =>
+      !foods.some(
+        (candidate, candidateIndex) =>
+          candidateIndex !== foodIndex &&
+          foodAlwaysDominates(ctx, candidate, food, speedStat, candidateIndex, foodIndex),
+      ),
+  );
 }
 
 function getFoodChangeCost(ctx: GcdOptimizationContext, food?: G.Food): number {
@@ -880,15 +1062,16 @@ function getFinalStats(ctx: GcdOptimizationContext, state: GcdCombinedState, foo
 }
 
 function isBetterGcdOptimization(
-  candidate: { effects: EquippedEffects, stats: G.Stats, changeCost: number, foodId?: G.GearId },
-  current: { effects: EquippedEffects, stats: G.Stats, changeCost: number, foodId?: G.GearId } | undefined,
+  candidate: { effects: EquippedEffects; stats: G.Stats; changeCost: number; foodId?: G.GearId },
+  current: { effects: EquippedEffects; stats: G.Stats; changeCost: number; foodId?: G.GearId } | undefined,
   speedStat: G.Stat,
   requiredSpeed: number,
 ): boolean {
   if (current === undefined) return true;
   const damageDiff = candidate.effects.damage - current.effects.damage;
   if (Math.abs(damageDiff) > 1e-10) return damageDiff > 0;
-  const overflowDiff = getSpeedOverflow(candidate.stats, speedStat, requiredSpeed) -
+  const overflowDiff =
+    getSpeedOverflow(candidate.stats, speedStat, requiredSpeed) -
     getSpeedOverflow(current.stats, speedStat, requiredSpeed);
   if (overflowDiff !== 0) return overflowDiff < 0;
   if (candidate.changeCost !== current.changeCost) return candidate.changeCost < current.changeCost;
@@ -896,7 +1079,7 @@ function isBetterGcdOptimization(
 }
 
 function isSpeedWithinRange(ctx: GcdOptimizationContext, speed: number): boolean {
-  return ctx.speedRange === undefined || speed >= ctx.speedRange.min && speed <= ctx.speedRange.max;
+  return ctx.speedRange === undefined || (speed >= ctx.speedRange.min && speed <= ctx.speedRange.max);
 }
 
 function getSpeedRangeDistance(ctx: GcdOptimizationContext, speed: number): number {
@@ -908,8 +1091,8 @@ function getSpeedRangeDistance(ctx: GcdOptimizationContext, speed: number): numb
 
 function isCloserToSpeedRange(
   ctx: GcdOptimizationContext,
-  candidate: { effects: EquippedEffects, stats: G.Stats },
-  current: { effects: EquippedEffects, stats: G.Stats } | undefined,
+  candidate: { effects: EquippedEffects; stats: G.Stats },
+  current: { effects: EquippedEffects; stats: G.Stats } | undefined,
   speedStat: G.Stat,
 ): boolean {
   if (current === undefined) return true;
@@ -936,14 +1119,16 @@ function evaluateGcdFrontier(
   frontier: GcdCombinedState[],
   customSkipped: boolean,
 ): GcdOptimizationResult {
-  let best: (GcdCombinedState & {
-    effects: EquippedEffects,
-    finalStats: G.Stats,
-    food?: G.Food,
-    finalChangeCost: number,
-  }) | undefined;
-  let fastest: { effects: EquippedEffects, stats: G.Stats } | undefined;
-  let closest: { effects: EquippedEffects, stats: G.Stats } | undefined;
+  let best:
+    | (GcdCombinedState & {
+        effects: EquippedEffects;
+        finalStats: G.Stats;
+        food?: G.Food;
+        finalChangeCost: number;
+      })
+    | undefined;
+  let fastest: { effects: EquippedEffects; stats: G.Stats } | undefined;
+  let closest: { effects: EquippedEffects; stats: G.Stats } | undefined;
   const foods = getFoodCandidates(ctx, speedStat);
   for (const state of frontier) {
     for (const food of foods) {
@@ -1027,25 +1212,23 @@ function evaluateGcdFrontier(
   return { status: 'error', message: '没有可用于计算的装备状态。' };
 }
 
-function getDamageFoodCandidates(
-  ctx: GcdOptimizationContext,
-  damageStats: G.Stat[],
-): (G.Food | undefined)[] {
+function getDamageFoodCandidates(ctx: GcdOptimizationContext, damageStats: G.Stat[]): (G.Food | undefined)[] {
   const foods: (G.Food | undefined)[] = [undefined, ...ctx.foods];
   foods.sort((a, b) => (a?.id ?? 0) - (b?.id ?? 0));
-  return foods.filter((food, foodIndex) => !foods.some((candidate, candidateIndex) => {
-    if (candidateIndex === foodIndex) return false;
-    if (!damageStats.every(stat => isFoodStatAlwaysAtLeast(candidate, food, stat))) return false;
-    return candidateIndex < foodIndex || damageStats.some(stat => !isSameFoodStat(candidate, food, stat));
-  }));
+  return foods.filter(
+    (food, foodIndex) =>
+      !foods.some((candidate, candidateIndex) => {
+        if (candidateIndex === foodIndex) return false;
+        if (!damageStats.every((stat) => isFoodStatAlwaysAtLeast(candidate, food, stat))) return false;
+        return candidateIndex < foodIndex || damageStats.some((stat) => !isSameFoodStat(candidate, food, stat));
+      }),
+  );
 }
 
 function getConsumableStatBonus(value: number, consumable: G.Food | undefined, stat: G.Stat): number {
   if (consumable === undefined || !(stat in consumable.stats)) return 0;
   const maximum = consumable.stats[stat] ?? 0;
-  return stat in consumable.statRates
-    ? Math.min(maximum, floor(value * consumable.statRates[stat]! / 100))
-    : maximum;
+  return stat in consumable.statRates ? Math.min(maximum, floor((value * consumable.statRates[stat]!) / 100)) : maximum;
 }
 
 function getExactFinalStatValue(
@@ -1077,54 +1260,64 @@ function createExactDamageModel(
     attackMainStat === undefined ||
     statModifiers === undefined ||
     traitDamageMultiplier === undefined
-  ) return;
+  )
+    return;
   const weaponStat: G.Stat = mainStat === 'MND' || mainStat === 'INT' ? 'MDMG' : 'PDMG';
   const supportedStats = new Set<G.Stat>([attackMainStat, weaponStat, 'CRT', 'DET', 'DHT', 'TEN']);
-  const damageStats = relevantStats.filter(stat => stat !== speedStat);
+  const damageStats = relevantStats.filter((stat) => stat !== speedStat);
   const attackStatModifier = statModifiers[attackMainStat as 'STR' | 'DEX' | 'INT' | 'MND' | 'VIT'];
   if (
-    damageStats.some(stat => !supportedStats.has(stat) || ctx.baseStats[stat] === undefined) ||
+    damageStats.some((stat) => !supportedStats.has(stat) || ctx.baseStats[stat] === undefined) ||
     attackStatModifier === undefined
-  ) return;
+  )
+    return;
 
   const level = G.jobLevelModifiers[ctx.jobLevel];
   const { main, sub, div, det, detTrunc } = level;
   const attackPowerModifier = mainStat === 'VIT' ? level.apTank : level.ap;
-  const weaponDamageBase = floor(main * attackStatModifier / 1000);
+  const weaponDamageBase = floor((main * attackStatModifier) / 1000);
   const factor = (stat: G.Stat, value: number): number => {
     if (stat === attackMainStat) {
-      return floor(attackPowerModifier *
-        (floor(value * (ctx.schema.partyBonus ?? 1.05)) - main) / main + 100) / 100;
+      return floor((attackPowerModifier * (floor(value * (ctx.schema.partyBonus ?? 1.05)) - main)) / main + 100) / 100;
     }
     if (stat === weaponStat) return weaponDamageBase + value;
     if (stat === 'CRT') {
-      const chance = floor(200 * (value - sub) / div + 50) / 1000;
-      const amount = floor(200 * (value - sub) / div + 1400) / 1000;
+      const chance = floor((200 * (value - sub)) / div + 50) / 1000;
+      const amount = floor((200 * (value - sub)) / div + 1400) / 1000;
       return (amount - 1) * chance + 1;
     }
     if (stat === 'DET') {
-      return floor((140 * (value - main) / det + 1000) / detTrunc) * detTrunc / 1000;
+      return (floor(((140 * (value - main)) / det + 1000) / detTrunc) * detTrunc) / 1000;
     }
-    if (stat === 'DHT') return 0.25 * floor(550 * (value - sub) / div) / 1000 + 1;
-    if (stat === 'TEN') return floor(112 * (value - sub) / div + 1000) / 1000;
+    if (stat === 'DHT') return (0.25 * floor((550 * (value - sub)) / div)) / 1000 + 1;
+    if (stat === 'TEN') return floor((112 * (value - sub)) / div + 1000) / 1000;
     return NaN;
   };
   const logFactor = (stat: G.Stat, value: number): number => Math.log(factor(stat, value));
-  const lowerBounds = damageStats.map(stat => (ctx.baseStats[stat] ?? 0) +
-    slotStates.reduce((total, slot) => total +
-      Math.min(...slot.states.map(state => state.stats[stat] ?? 0)), 0));
-  const upperBounds = damageStats.map(stat => (ctx.baseStats[stat] ?? 0) +
-    slotStates.reduce((total, slot) => total +
-      Math.max(...slot.states.map(state => state.stats[stat] ?? 0)), 0));
-  if (lowerBounds.some((value, index) =>
-    !Number.isInteger(value) ||
-    !Number.isInteger(upperBounds[index]) ||
-    upperBounds[index] - value > 20000 ||
-    !Number.isFinite(logFactor(damageStats[index], value)) ||
-    !Number.isFinite(logFactor(damageStats[index], upperBounds[index])))) return;
+  const lowerBounds = damageStats.map(
+    (stat) =>
+      (ctx.baseStats[stat] ?? 0) +
+      slotStates.reduce((total, slot) => total + Math.min(...slot.states.map((state) => state.stats[stat] ?? 0)), 0),
+  );
+  const upperBounds = damageStats.map(
+    (stat) =>
+      (ctx.baseStats[stat] ?? 0) +
+      slotStates.reduce((total, slot) => total + Math.max(...slot.states.map((state) => state.stats[stat] ?? 0)), 0),
+  );
+  if (
+    lowerBounds.some(
+      (value, index) =>
+        !Number.isInteger(value) ||
+        !Number.isInteger(upperBounds[index]) ||
+        upperBounds[index] - value > 20000 ||
+        !Number.isFinite(logFactor(damageStats[index], value)) ||
+        !Number.isFinite(logFactor(damageStats[index], upperBounds[index])),
+    )
+  )
+    return;
   for (let index = 0; index < damageStats.length; index++) {
     const stat = damageStats[index];
-    const foodMaximum = Math.max(0, ...ctx.foods.map(food => food.stats[stat] ?? 0));
+    const foodMaximum = Math.max(0, ...ctx.foods.map((food) => food.stats[stat] ?? 0));
     const fixedMaximum = ctx.fixedConsumables.reduce((total, food) => total + (food.stats[stat] ?? 0), 0);
     const finalUpperBound = upperBounds[index] + foodMaximum + fixedMaximum;
     let previous = factor(stat, lowerBounds[index]);
@@ -1138,7 +1331,7 @@ function createExactDamageModel(
     attackMainStat,
     weaponStat,
     damageStats,
-    damageIndexes: damageStats.map(stat => relevantStats.indexOf(stat)),
+    damageIndexes: damageStats.map((stat) => relevantStats.indexOf(stat)),
     foods: getDamageFoodCandidates(ctx, damageStats),
     lowerBounds,
     upperBounds,
@@ -1149,11 +1342,7 @@ function createExactDamageModel(
   };
 }
 
-function getMaximumExactModelDamage(
-  ctx: GcdOptimizationContext,
-  model: GcdExactDamageModel,
-  values: number[],
-): number {
+function getMaximumExactModelDamage(ctx: GcdOptimizationContext, model: GcdExactDamageModel, values: number[]): number {
   let maximum = -Infinity;
   for (const food of model.foods) {
     maximum = Math.max(maximum, getExactModelDamage(ctx, model, values, food));
@@ -1184,8 +1373,7 @@ function getExactModelDamage(
     else if (stat === 'DHT') directHit = factor;
     else if (stat === 'TEN') tenacity = factor;
   }
-  return 0.01 * weapon * attackMain * determination * tenacity * model.damageMultiplier *
-    criticalHit * directHit;
+  return 0.01 * weapon * attackMain * determination * tenacity * model.damageMultiplier * criticalHit * directHit;
 }
 
 function addStatValues(a: number[], b: number[]): number[] {
@@ -1203,16 +1391,16 @@ function getExactCombinedStats(ctx: GcdOptimizationContext, choices: GcdExactCho
 }
 
 function getExactChoicesProgressionCosts(choices: GcdExactChoice[]): Required<ProgressionCostState> {
-  return choices.reduce((costs, choice) => ({
-    tomestoneCost: costs.tomestoneCost + getTomestoneCost(choice.state),
-    raidCost: costs.raidCost + getRaidCost(choice.state),
-  }), { tomestoneCost: 0, raidCost: 0 });
+  return choices.reduce(
+    (costs, choice) => ({
+      tomestoneCost: costs.tomestoneCost + getTomestoneCost(choice.state),
+      raidCost: costs.raidCost + getRaidCost(choice.state),
+    }),
+    { tomestoneCost: 0, raidCost: 0 },
+  );
 }
 
-function areExactChoicesWithinProgressionBudget(
-  ctx: GcdOptimizationContext,
-  choices: GcdExactChoice[],
-): boolean {
+function areExactChoicesWithinProgressionBudget(ctx: GcdOptimizationContext, choices: GcdExactChoice[]): boolean {
   return isWithinProgressionBudget(ctx, getExactChoicesProgressionCosts(choices));
 }
 
@@ -1222,17 +1410,18 @@ function selectExactChoicesWithinProgressionBudget(
   getScore: (choice: GcdExactChoice) => number,
 ): GcdExactChoice[] | undefined {
   if (ctx.progressionWeeks === undefined) {
-    return slots.map(slot => slot.choices.reduce((best, choice) =>
-      getScore(choice) > getScore(best) ? choice : best));
+    return slots.map((slot) =>
+      slot.choices.reduce((best, choice) => (getScore(choice) > getScore(best) ? choice : best)),
+    );
   }
   interface SelectionState extends Required<ProgressionCostState> {
-    score: number,
-    choices: GcdExactChoice[],
+    score: number;
+    choices: GcdExactChoice[];
   }
   let selections = new Map<string, SelectionState>();
   selections.set('0,0', { tomestoneCost: 0, raidCost: 0, score: 0, choices: [] });
   for (const slot of slots) {
-    const bestChoicesByCost = new Map<string, { choice: GcdExactChoice, score: number }>();
+    const bestChoicesByCost = new Map<string, { choice: GcdExactChoice; score: number }>();
     for (const choice of slot.choices) {
       const key = `${getTomestoneCost(choice.state)},${getRaidCost(choice.state)}`;
       const score = getScore(choice);
@@ -1263,16 +1452,17 @@ function selectExactChoicesWithinProgressionBudget(
     selections = next;
     if (selections.size === 0) return;
   }
-  return Array.from(selections.values()).reduce((best, selection) =>
-    selection.score > best.score ? selection : best).choices;
+  return Array.from(selections.values()).reduce((best, selection) => (selection.score > best.score ? selection : best))
+    .choices;
 }
 
 function getExactDamageBaseWeights(model: GcdExactDamageModel): number[] {
   return model.damageStats.map((stat, index) => {
     const low = model.lowerBounds[index];
     const high = model.upperBounds[index];
-    return high === low ? 0 : Math.max(1e-12,
-      (model.logFactor(stat, high) - model.logFactor(stat, low)) / (high - low));
+    return high === low
+      ? 0
+      : Math.max(1e-12, (model.logFactor(stat, high) - model.logFactor(stat, low)) / (high - low));
   });
 }
 
@@ -1281,8 +1471,8 @@ function findExactDamageIncumbent(
   model: GcdExactDamageModel,
   slots: GcdExactSlot[],
   relevantStats: G.Stat[],
-): { damage: number, baseWeights: number[] } | undefined {
-  const baseValues = relevantStats.map(stat => ctx.baseStats[stat] ?? 0);
+): { damage: number; baseWeights: number[] } | undefined {
+  const baseValues = relevantStats.map((stat) => ctx.baseStats[stat] ?? 0);
   const baseWeights = getExactDamageBaseWeights(model);
   let bestDamage = -Infinity;
   let seed = 0x12345678;
@@ -1291,10 +1481,10 @@ function findExactDamageIncumbent(
     return seed / 0x100000000;
   };
   for (let attempt = 0; attempt < 40; attempt++) {
-    const weights = baseWeights.map(weight => weight * Math.exp((random() - 0.5) * (attempt === 0 ? 0 : 3)));
-    const selected = selectExactChoicesWithinProgressionBudget(ctx, slots, choice =>
-      model.damageIndexes.reduce((score, statIndex, index) =>
-        score + weights[index] * choice.values[statIndex], 0));
+    const weights = baseWeights.map((weight) => weight * Math.exp((random() - 0.5) * (attempt === 0 ? 0 : 3)));
+    const selected = selectExactChoicesWithinProgressionBudget(ctx, slots, (choice) =>
+      model.damageIndexes.reduce((score, statIndex, index) => score + weights[index] * choice.values[statIndex], 0),
+    );
     if (selected === undefined) continue;
     let values = selected.reduce((total, choice) => addStatValues(total, choice.values), baseValues);
     let progressionCosts = getExactChoicesProgressionCosts(selected);
@@ -1307,10 +1497,11 @@ function findExactDamageIncumbent(
         let localDamage = getMaximumExactModelDamage(ctx, model, values);
         for (const choice of slots[slotIndex].choices) {
           const candidateProgressionCosts = {
-            tomestoneCost: progressionCosts.tomestoneCost - getTomestoneCost(selected[slotIndex].state) +
+            tomestoneCost:
+              progressionCosts.tomestoneCost -
+              getTomestoneCost(selected[slotIndex].state) +
               getTomestoneCost(choice.state),
-            raidCost: progressionCosts.raidCost - getRaidCost(selected[slotIndex].state) +
-              getRaidCost(choice.state),
+            raidCost: progressionCosts.raidCost - getRaidCost(selected[slotIndex].state) + getRaidCost(choice.state),
           };
           if (!isWithinProgressionBudget(ctx, candidateProgressionCosts)) continue;
           const candidateValues = addStatValues(without, choice.values);
@@ -1323,10 +1514,11 @@ function findExactDamageIncumbent(
         }
         changed ||= localChoice !== selected[slotIndex];
         progressionCosts = {
-          tomestoneCost: progressionCosts.tomestoneCost - getTomestoneCost(selected[slotIndex].state) +
+          tomestoneCost:
+            progressionCosts.tomestoneCost -
+            getTomestoneCost(selected[slotIndex].state) +
             getTomestoneCost(localChoice.state),
-          raidCost: progressionCosts.raidCost - getRaidCost(selected[slotIndex].state) +
-            getRaidCost(localChoice.state),
+          raidCost: progressionCosts.raidCost - getRaidCost(selected[slotIndex].state) + getRaidCost(localChoice.state),
         };
         selected[slotIndex] = localChoice;
         values = localValues;
@@ -1364,19 +1556,23 @@ function createDamageDual(
       let maximum = -Infinity;
       for (let statValue = model.lowerBounds[index]; statValue <= model.upperBounds[index]; statValue++) {
         const finalValue = getExactFinalStatValue(ctx, statValue, model.damageStats[index], food);
-        maximum = Math.max(maximum, model.logFactor(model.damageStats[index], finalValue) -
-          weights[index] * statValue);
+        maximum = Math.max(maximum, model.logFactor(model.damageStats[index], finalValue) - weights[index] * statValue);
       }
       value += maximum;
     }
     intercept = Math.max(intercept, value);
   }
-  const slotMaximums = slots.map(slot => Math.max(...slot.choices.map(choice =>
-    model.damageIndexes.reduce((score, statIndex, index) =>
-      score + weights[index] * choice.values[statIndex], 0))));
-  const root = intercept + slotMaximums.reduce((total, value) => total + value, 0) +
-    model.damageIndexes.reduce((total, statIndex, index) =>
-      total + weights[index] * baseValues[statIndex], 0);
+  const slotMaximums = slots.map((slot) =>
+    Math.max(
+      ...slot.choices.map((choice) =>
+        model.damageIndexes.reduce((score, statIndex, index) => score + weights[index] * choice.values[statIndex], 0),
+      ),
+    ),
+  );
+  const root =
+    intercept +
+    slotMaximums.reduce((total, value) => total + value, 0) +
+    model.damageIndexes.reduce((total, statIndex, index) => total + weights[index] * baseValues[statIndex], 0);
   return { weights, intercept, slotMaximums, root };
 }
 
@@ -1426,12 +1622,20 @@ function updateDamageDualSupports(
   baseValues: number[],
 ): void {
   for (const dual of duals) {
-    dual.slotMaximums = slots.map(slot => Math.max(...slot.choices.map(choice =>
-      model.damageIndexes.reduce((score, statIndex, index) =>
-        score + dual.weights[index] * choice.values[statIndex], 0))));
-    dual.root = dual.intercept + dual.slotMaximums.reduce((total, value) => total + value, 0) +
-      model.damageIndexes.reduce((total, statIndex, index) =>
-        total + dual.weights[index] * baseValues[statIndex], 0);
+    dual.slotMaximums = slots.map((slot) =>
+      Math.max(
+        ...slot.choices.map((choice) =>
+          model.damageIndexes.reduce(
+            (score, statIndex, index) => score + dual.weights[index] * choice.values[statIndex],
+            0,
+          ),
+        ),
+      ),
+    );
+    dual.root =
+      dual.intercept +
+      dual.slotMaximums.reduce((total, value) => total + value, 0) +
+      model.damageIndexes.reduce((total, statIndex, index) => total + dual.weights[index] * baseValues[statIndex], 0);
   }
 }
 
@@ -1443,11 +1647,13 @@ function filterExactSlotChoices(
 ): void {
   const threshold = Math.log(Math.max(Number.MIN_VALUE, bestDamage - gcdOptimizationDamageTolerance));
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-    slots[slotIndex].choices = slots[slotIndex].choices.filter(choice => {
+    slots[slotIndex].choices = slots[slotIndex].choices.filter((choice) => {
       let upper = Infinity;
       for (const dual of duals) {
-        const score = model.damageIndexes.reduce((total, statIndex, index) =>
-          total + dual.weights[index] * choice.values[statIndex], 0);
+        const score = model.damageIndexes.reduce(
+          (total, statIndex, index) => total + dual.weights[index] * choice.values[statIndex],
+          0,
+        );
         upper = Math.min(upper, dual.root - dual.slotMaximums[slotIndex] + score);
       }
       // Retain equality plus a floating-point tolerance; pruning a true optimum would make the DP inexact.
@@ -1483,13 +1689,15 @@ function evaluateExactGcdContenders(
   maximumDamage: number,
   customSkipped: boolean,
 ): GcdOptimizationResult {
-  let best: {
-    state: GcdCombinedState,
-    effects: EquippedEffects,
-    stats: G.Stats,
-    food?: G.Food,
-    changeCost: number,
-  } | undefined;
+  let best:
+    | {
+        state: GcdCombinedState;
+        effects: EquippedEffects;
+        stats: G.Stats;
+        food?: G.Food;
+        changeCost: number;
+      }
+    | undefined;
   const foods = getFoodCandidates(ctx, speedStat);
   for (const state of contenders) {
     for (const food of foods) {
@@ -1500,18 +1708,16 @@ function evaluateExactGcdContenders(
         effects.gcd > ctx.targetGcd ||
         !isSpeedWithinRange(ctx, stats[speedStat] ?? 0) ||
         effects.damage + gcdOptimizationDamageTolerance < maximumDamage
-      ) continue;
+      )
+        continue;
       const changeCost = state.changeCost + getFoodChangeCost(ctx, food);
       if (best !== undefined) {
         const overflow = getSpeedOverflow(stats, speedStat, requiredSpeed);
         const bestOverflow = getSpeedOverflow(best.stats, speedStat, requiredSpeed);
         if (overflow > bestOverflow) continue;
         if (overflow === bestOverflow && changeCost > best.changeCost) continue;
-        if (
-          overflow === bestOverflow &&
-          changeCost === best.changeCost &&
-          (food?.id ?? 0) >= (best.food?.id ?? 0)
-        ) continue;
+        if (overflow === bestOverflow && changeCost === best.changeCost && (food?.id ?? 0) >= (best.food?.id ?? 0))
+          continue;
       }
       best = { state, effects, stats, food, changeCost };
     }
@@ -1545,30 +1751,30 @@ function optimizeAllGearExactly(
 ): GcdOptimizationResult | undefined {
   const model = createExactDamageModel(ctx, relevantStats, slotStateSets, speedStat);
   if (model === undefined) return;
-  const baseValues = relevantStats.map(stat => ctx.baseStats[stat] ?? 0);
+  const baseValues = relevantStats.map((stat) => ctx.baseStats[stat] ?? 0);
   const speedIndex = relevantStats.indexOf(speedStat);
-  const slots: GcdExactSlot[] = slotStateSets.map(slot => ({
+  const slots: GcdExactSlot[] = slotStateSets.map((slot) => ({
     schemaIndex: slot.schemaIndex,
-    choices: slot.states.map(state => ({
+    choices: slot.states.map((state) => ({
       state,
-      values: relevantStats.map(stat => state.stats[stat] ?? 0),
+      values: relevantStats.map((stat) => state.stats[stat] ?? 0),
     })),
   }));
   const incumbent = findExactDamageIncumbent(ctx, model, slots, relevantStats);
   if (incumbent === undefined) return;
   const duals = createDamageDuals(ctx, model, slots, baseValues, incumbent.baseWeights);
   filterExactSlotChoices(slots, model, duals, incumbent.damage);
-  if (slots.some(slot => slot.choices.length === 0)) return;
+  if (slots.some((slot) => slot.choices.length === 0)) return;
 
   // Exact-key DP grows monotonically. Process large choice sets first so the small sets multiply the already
   // deduplicated frontier; each key contains every damage dimension and both progression resources.
   slots.sort((a, b) => b.choices.length - a.choices.length || a.schemaIndex - b.schemaIndex);
   updateDamageDualSupports(duals, model, slots, baseValues);
   filterExactSlotChoices(slots, model, duals, incumbent.damage);
-  if (slots.some(slot => slot.choices.length === 0)) return;
+  if (slots.some((slot) => slot.choices.length === 0)) return;
   updateDamageDualSupports(duals, model, slots, baseValues);
 
-  const suffixes = duals.map(dual => {
+  const suffixes = duals.map((dual) => {
     const suffix = Array.from({ length: slots.length + 1 }, () => 0);
     for (let depth = slots.length - 1; depth >= 0; depth--) {
       suffix[depth] = suffix[depth + 1] + dual.slotMaximums[depth];
@@ -1577,19 +1783,26 @@ function optimizeAllGearExactly(
   });
   for (const slot of slots) {
     for (const choice of slot.choices) {
-      choice.dualScores = duals.map(dual => model.damageIndexes.reduce((total, statIndex, index) =>
-        total + dual.weights[index] * choice.values[statIndex], 0));
+      choice.dualScores = duals.map((dual) =>
+        model.damageIndexes.reduce(
+          (total, statIndex, index) => total + dual.weights[index] * choice.values[statIndex],
+          0,
+        ),
+      );
     }
   }
   const threshold = Math.log(Math.max(Number.MIN_VALUE, incumbent.damage - gcdOptimizationDamageTolerance));
-  let frontier: GcdExactState[] = [{
-    values: baseValues,
-    dualScores: duals.map(dual => model.damageIndexes.reduce((total, statIndex, index) =>
-      total + dual.weights[index] * baseValues[statIndex], 0)),
-    changeCost: 0,
-    tomestoneCost: 0,
-    raidCost: 0,
-  }];
+  let frontier: GcdExactState[] = [
+    {
+      values: baseValues,
+      dualScores: duals.map((dual) =>
+        model.damageIndexes.reduce((total, statIndex, index) => total + dual.weights[index] * baseValues[statIndex], 0),
+      ),
+      changeCost: 0,
+      tomestoneCost: 0,
+      raidCost: 0,
+    },
+  ];
   for (let depth = 0; depth < slots.length; depth++) {
     const next = new Map<string, GcdExactState>();
     for (const partial of frontier) {
@@ -1604,14 +1817,13 @@ function optimizeAllGearExactly(
         const tomestoneCost = getTomestoneCost(partial) + getTomestoneCost(choice.state);
         const raidCost = getRaidCost(partial) + getRaidCost(choice.state);
         if (!isWithinProgressionBudget(ctx, { tomestoneCost, raidCost })) continue;
-        const key = `${model.damageIndexes.map(index => values[index]).join(',')};` +
-          `${tomestoneCost},${raidCost}`;
+        const key = `${model.damageIndexes.map((index) => values[index]).join(',')};` + `${tomestoneCost},${raidCost}`;
         const changeCost = partial.changeCost + choice.state.changeCost;
         const existing = next.get(key);
         if (
           existing === undefined ||
           values[speedIndex] < existing.values[speedIndex] ||
-          values[speedIndex] === existing.values[speedIndex] && changeCost < existing.changeCost
+          (values[speedIndex] === existing.values[speedIndex] && changeCost < existing.changeCost)
         ) {
           next.set(key, {
             values,
@@ -1642,14 +1854,7 @@ function optimizeAllGearExactly(
     if (damages[index] + gcdOptimizationDamageTolerance < maximumDamage) continue;
     contenders.push(exactStateToCombinedState(ctx, frontier[index]));
   }
-  return evaluateExactGcdContenders(
-    ctx,
-    speedStat,
-    requiredSpeed,
-    contenders,
-    maximumDamage,
-    customSkipped,
-  );
+  return evaluateExactGcdContenders(ctx, speedStat, requiredSpeed, contenders, maximumDamage, customSkipped);
 }
 
 function getRequiredExactBaseSpeed(
@@ -1692,8 +1897,10 @@ function getConstrainedChoiceScore(
   speedIndex: number,
   speedWeight: number,
 ): number {
-  return model.damageIndexes.reduce((score, statIndex, index) =>
-    score + weights[index] * choice.values[statIndex], speedWeight * choice.values[speedIndex]);
+  return model.damageIndexes.reduce(
+    (score, statIndex, index) => score + weights[index] * choice.values[statIndex],
+    speedWeight * choice.values[speedIndex],
+  );
 }
 
 function getConstrainedDualIntercept(
@@ -1707,8 +1914,7 @@ function getConstrainedDualIntercept(
     let maximum = -Infinity;
     for (let value = model.lowerBounds[index]; value <= model.upperBounds[index]; value++) {
       const finalValue = getExactFinalStatValue(ctx, value, model.damageStats[index], food);
-      maximum = Math.max(maximum, model.logFactor(model.damageStats[index], finalValue) -
-        weights[index] * value);
+      maximum = Math.max(maximum, model.logFactor(model.damageStats[index], finalValue) - weights[index] * value);
     }
     intercept += maximum;
   }
@@ -1725,17 +1931,22 @@ function createConstrainedDamageDual(
   intercept: number,
   speedWeight: number,
 ): GcdConstrainedDamageDual {
-  const slotMaximums = slots.map(slot => Math.max(...slot.choices.map(choice =>
-    getConstrainedChoiceScore(choice, model, weights, speedIndex, speedWeight))));
-  const baseScore = model.damageIndexes.reduce((score, statIndex, index) =>
-    score + weights[index] * baseValues[statIndex], speedWeight * baseValues[speedIndex]);
+  const slotMaximums = slots.map((slot) =>
+    Math.max(
+      ...slot.choices.map((choice) => getConstrainedChoiceScore(choice, model, weights, speedIndex, speedWeight)),
+    ),
+  );
+  const baseScore = model.damageIndexes.reduce(
+    (score, statIndex, index) => score + weights[index] * baseValues[statIndex],
+    speedWeight * baseValues[speedIndex],
+  );
   return {
     weights,
     intercept,
     speedWeight,
     slotMaximums,
-    root: intercept - speedWeight * requiredBaseSpeed + baseScore +
-      slotMaximums.reduce((total, value) => total + value, 0),
+    root:
+      intercept - speedWeight * requiredBaseSpeed + baseScore + slotMaximums.reduce((total, value) => total + value, 0),
   };
 }
 
@@ -1752,16 +1963,17 @@ function createConstrainedDamageDuals(
   const duals: GcdConstrainedDamageDual[] = [];
   for (const weights of weightCandidates) {
     const intercept = getConstrainedDualIntercept(ctx, model, weights, food);
-    const evaluate = (speedWeight: number) => createConstrainedDamageDual(
-      model,
-      slots,
-      baseValues,
-      speedIndex,
-      requiredBaseSpeed,
-      weights,
-      intercept,
-      speedWeight,
-    );
+    const evaluate = (speedWeight: number) =>
+      createConstrainedDamageDual(
+        model,
+        slots,
+        baseValues,
+        speedIndex,
+        requiredBaseSpeed,
+        weights,
+        intercept,
+        speedWeight,
+      );
     let low = 0;
     let high = Math.max(1e-10, ...weights) * 4;
     let best = evaluate(0);
@@ -1796,11 +2008,21 @@ function updateConstrainedDamageDualSupports(
   requiredBaseSpeed: number,
 ): void {
   for (const dual of duals) {
-    dual.slotMaximums = slots.map(slot => Math.max(...slot.choices.map(choice =>
-      getConstrainedChoiceScore(choice, model, dual.weights, speedIndex, dual.speedWeight))));
-    const baseScore = model.damageIndexes.reduce((score, statIndex, index) =>
-      score + dual.weights[index] * baseValues[statIndex], dual.speedWeight * baseValues[speedIndex]);
-    dual.root = dual.intercept - dual.speedWeight * requiredBaseSpeed + baseScore +
+    dual.slotMaximums = slots.map((slot) =>
+      Math.max(
+        ...slot.choices.map((choice) =>
+          getConstrainedChoiceScore(choice, model, dual.weights, speedIndex, dual.speedWeight),
+        ),
+      ),
+    );
+    const baseScore = model.damageIndexes.reduce(
+      (score, statIndex, index) => score + dual.weights[index] * baseValues[statIndex],
+      dual.speedWeight * baseValues[speedIndex],
+    );
+    dual.root =
+      dual.intercept -
+      dual.speedWeight * requiredBaseSpeed +
+      baseScore +
       dual.slotMaximums.reduce((total, value) => total + value, 0);
   }
 }
@@ -1814,16 +2036,10 @@ function filterConstrainedExactSlotChoices(
 ): void {
   const threshold = Math.log(Math.max(Number.MIN_VALUE, bestDamage - gcdOptimizationDamageTolerance));
   for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-    slots[slotIndex].choices = slots[slotIndex].choices.filter(choice => {
+    slots[slotIndex].choices = slots[slotIndex].choices.filter((choice) => {
       let upper = Infinity;
       for (const dual of duals) {
-        const score = getConstrainedChoiceScore(
-          choice,
-          model,
-          dual.weights,
-          speedIndex,
-          dual.speedWeight,
-        );
+        const score = getConstrainedChoiceScore(choice, model, dual.weights, speedIndex, dual.speedWeight);
         upper = Math.min(upper, dual.root - dual.slotMaximums[slotIndex] + score);
       }
       return upper + gcdOptimizationBoundTolerance >= threshold;
@@ -1840,7 +2056,7 @@ function improveConstrainedExactChoices(
   speedIndex: number,
   requiredBaseSpeed: number,
   food: G.Food | undefined,
-): { choices: GcdExactChoice[], values: number[], damage: number } | undefined {
+): { choices: GcdExactChoice[]; values: number[]; damage: number } | undefined {
   const choices = selected.slice();
   let values = choices.reduce((total, choice) => addStatValues(total, choice.values), baseValues);
   let progressionCosts = getExactChoicesProgressionCosts(choices);
@@ -1855,10 +2071,11 @@ function improveConstrainedExactChoices(
       let bestDamage = getExactModelDamage(ctx, model, values, food);
       for (const choice of slots[slotIndex].choices) {
         const candidateProgressionCosts = {
-          tomestoneCost: progressionCosts.tomestoneCost - getTomestoneCost(choices[slotIndex].state) +
+          tomestoneCost:
+            progressionCosts.tomestoneCost -
+            getTomestoneCost(choices[slotIndex].state) +
             getTomestoneCost(choice.state),
-          raidCost: progressionCosts.raidCost - getRaidCost(choices[slotIndex].state) +
-            getRaidCost(choice.state),
+          raidCost: progressionCosts.raidCost - getRaidCost(choices[slotIndex].state) + getRaidCost(choice.state),
         };
         if (!isWithinProgressionBudget(ctx, candidateProgressionCosts)) continue;
         const candidateValues = addStatValues(without, choice.values);
@@ -1872,10 +2089,11 @@ function improveConstrainedExactChoices(
       }
       changed ||= bestChoice !== choices[slotIndex];
       progressionCosts = {
-        tomestoneCost: progressionCosts.tomestoneCost - getTomestoneCost(choices[slotIndex].state) +
+        tomestoneCost:
+          progressionCosts.tomestoneCost -
+          getTomestoneCost(choices[slotIndex].state) +
           getTomestoneCost(bestChoice.state),
-        raidCost: progressionCosts.raidCost - getRaidCost(choices[slotIndex].state) +
-          getRaidCost(bestChoice.state),
+        raidCost: progressionCosts.raidCost - getRaidCost(choices[slotIndex].state) + getRaidCost(bestChoice.state),
       };
       choices[slotIndex] = bestChoice;
       values = bestValues;
@@ -1894,15 +2112,17 @@ function findConstrainedExactIncumbent(
   requiredBaseSpeed: number,
   food: G.Food | undefined,
   baseWeights: number[],
-): { choices: GcdExactChoice[], values: number[], damage: number } | undefined {
+): { choices: GcdExactChoice[]; values: number[]; damage: number } | undefined {
   const maximumSpeedChoices = selectExactChoicesWithinProgressionBudget(
     ctx,
     slots,
-    choice => choice.values[speedIndex],
+    (choice) => choice.values[speedIndex],
   );
   if (maximumSpeedChoices === undefined) return;
-  const maximumSpeed = maximumSpeedChoices.reduce((total, choice) => total + choice.values[speedIndex],
-    baseValues[speedIndex]);
+  const maximumSpeed = maximumSpeedChoices.reduce(
+    (total, choice) => total + choice.values[speedIndex],
+    baseValues[speedIndex],
+  );
   if (maximumSpeed < requiredBaseSpeed) return;
   let best = improveConstrainedExactChoices(
     ctx,
@@ -1921,11 +2141,9 @@ function findConstrainedExactIncumbent(
     return seed / 0x100000000;
   };
   for (let attempt = 0; attempt < 24; attempt++) {
-    const weights = baseWeights.map(weight => weight * Math.exp((random() - 0.5) * (attempt === 0 ? 0 : 4)));
-    let selected = selectExactChoicesWithinProgressionBudget(
-      ctx,
-      slots,
-      choice => getConstrainedChoiceScore(choice, model, weights, speedIndex, 0),
+    const weights = baseWeights.map((weight) => weight * Math.exp((random() - 0.5) * (attempt === 0 ? 0 : 4)));
+    let selected = selectExactChoicesWithinProgressionBudget(ctx, slots, (choice) =>
+      getConstrainedChoiceScore(choice, model, weights, speedIndex, 0),
     );
     if (selected === undefined) continue;
     let speed = selected.reduce((total, choice) => total + choice.values[speedIndex], baseValues[speedIndex]);
@@ -1933,10 +2151,8 @@ function findConstrainedExactIncumbent(
       let low = 0;
       let high = Math.max(1e-10, ...weights);
       for (let iteration = 0; iteration < 60; iteration++) {
-        selected = selectExactChoicesWithinProgressionBudget(
-          ctx,
-          slots,
-          choice => getConstrainedChoiceScore(choice, model, weights, speedIndex, high),
+        selected = selectExactChoicesWithinProgressionBudget(ctx, slots, (choice) =>
+          getConstrainedChoiceScore(choice, model, weights, speedIndex, high),
         )!;
         speed = selected.reduce((total, choice) => total + choice.values[speedIndex], baseValues[speedIndex]);
         if (speed >= requiredBaseSpeed) break;
@@ -1945,13 +2161,13 @@ function findConstrainedExactIncumbent(
       if (speed < requiredBaseSpeed) continue;
       for (let iteration = 0; iteration < 32; iteration++) {
         const middle = (low + high) / 2;
-        const candidate = selectExactChoicesWithinProgressionBudget(
-          ctx,
-          slots,
-          choice => getConstrainedChoiceScore(choice, model, weights, speedIndex, middle),
+        const candidate = selectExactChoicesWithinProgressionBudget(ctx, slots, (choice) =>
+          getConstrainedChoiceScore(choice, model, weights, speedIndex, middle),
         )!;
-        const candidateSpeed = candidate.reduce((total, choice) =>
-          total + choice.values[speedIndex], baseValues[speedIndex]);
+        const candidateSpeed = candidate.reduce(
+          (total, choice) => total + choice.values[speedIndex],
+          baseValues[speedIndex],
+        );
         if (candidateSpeed >= requiredBaseSpeed) {
           high = middle;
           selected = candidate;
@@ -1974,15 +2190,13 @@ function findConstrainedExactIncumbent(
       improved !== undefined &&
       areExactChoicesWithinProgressionBudget(ctx, improved.choices) &&
       (best === undefined || improved.damage > best.damage)
-    ) best = improved;
+    )
+      best = improved;
   }
   return best;
 }
 
-function exactChoicesToCombinedState(
-  ctx: GcdOptimizationContext,
-  choices: GcdExactChoice[],
-): GcdCombinedState {
+function exactChoicesToCombinedState(ctx: GcdOptimizationContext, choices: GcdExactChoice[]): GcdCombinedState {
   let stats = ctx.baseStats;
   let plan: GcdPlanNode | undefined;
   let changeCost = 0;
@@ -2011,7 +2225,7 @@ function searchConstrainedExactFood(
   getBestDamage: () => number,
   consider: (choices: GcdExactChoice[], food: G.Food | undefined) => void,
 ): void {
-  const slots = originalSlots.map(slot => ({ ...slot, choices: slot.choices.slice() }));
+  const slots = originalSlots.map((slot) => ({ ...slot, choices: slot.choices.slice() }));
   const duals = createConstrainedDamageDuals(
     ctx,
     model,
@@ -2024,26 +2238,32 @@ function searchConstrainedExactFood(
   );
   if (duals.length === 0 || Math.exp(duals[0].root) + gcdOptimizationDamageTolerance < getBestDamage()) return;
   filterConstrainedExactSlotChoices(slots, model, duals, speedIndex, getBestDamage());
-  if (slots.some(slot => slot.choices.length === 0)) return;
+  if (slots.some((slot) => slot.choices.length === 0)) return;
   slots.sort((a, b) => a.choices.length - b.choices.length || a.schemaIndex - b.schemaIndex);
   updateConstrainedDamageDualSupports(duals, model, slots, baseValues, speedIndex, requiredBaseSpeed);
   filterConstrainedExactSlotChoices(slots, model, duals, speedIndex, getBestDamage());
-  if (slots.some(slot => slot.choices.length === 0)) return;
+  if (slots.some((slot) => slot.choices.length === 0)) return;
   updateConstrainedDamageDualSupports(duals, model, slots, baseValues, speedIndex, requiredBaseSpeed);
 
   for (const slot of slots) {
     for (const choice of slot.choices) {
-      choice.dualScores = duals.map(dual => model.damageIndexes.reduce((score, statIndex, index) =>
-        score + dual.weights[index] * choice.values[statIndex], 0));
+      choice.dualScores = duals.map((dual) =>
+        model.damageIndexes.reduce(
+          (score, statIndex, index) => score + dual.weights[index] * choice.values[statIndex],
+          0,
+        ),
+      );
     }
     slot.choices.sort((a, b) => b.dualScores![0] - a.dualScores![0]);
   }
   const requiredGearSpeed = Math.max(0, requiredBaseSpeed - baseValues[speedIndex]);
   const dualSuffixes = duals.map((_, dualIndex) => {
     const exactSuffixes: Float64Array[] = Array.from({ length: slots.length + 1 }, () =>
-      new Float64Array(requiredGearSpeed + 1).fill(-Infinity));
+      new Float64Array(requiredGearSpeed + 1).fill(-Infinity),
+    );
     const suffixes: Float64Array[] = Array.from({ length: slots.length + 1 }, () =>
-      new Float64Array(requiredGearSpeed + 1).fill(-Infinity));
+      new Float64Array(requiredGearSpeed + 1).fill(-Infinity),
+    );
     exactSuffixes[slots.length][0] = 0;
     suffixes[slots.length][0] = 0;
     for (let depth = slots.length - 1; depth >= 0; depth--) {
@@ -2069,20 +2289,16 @@ function searchConstrainedExactFood(
   });
   const speedSuffix = Array.from({ length: slots.length + 1 }, () => 0);
   for (let depth = slots.length - 1; depth >= 0; depth--) {
-    speedSuffix[depth] = speedSuffix[depth + 1] + Math.max(...slots[depth].choices.map(choice =>
-      choice.values[speedIndex]));
+    speedSuffix[depth] =
+      speedSuffix[depth + 1] + Math.max(...slots[depth].choices.map((choice) => choice.values[speedIndex]));
   }
   const values = baseValues.slice();
-  const dualScores = duals.map(dual => model.damageIndexes.reduce((score, statIndex, index) =>
-    score + dual.weights[index] * baseValues[statIndex], 0));
+  const dualScores = duals.map((dual) =>
+    model.damageIndexes.reduce((score, statIndex, index) => score + dual.weights[index] * baseValues[statIndex], 0),
+  );
   const selected: GcdExactChoice[] = [];
-  const seen = Array.from({ length: slots.length + 1 }, () => new Map<string, { speed: number, cost: number }>());
-  const visit = (
-    depth: number,
-    changeCost: number,
-    tomestoneCost: number,
-    raidCost: number,
-  ): void => {
+  const seen = Array.from({ length: slots.length + 1 }, () => new Map<string, { speed: number; cost: number }>());
+  const visit = (depth: number, changeCost: number, tomestoneCost: number, raidCost: number): void => {
     if (depth === slots.length) {
       if (values[speedIndex] >= requiredBaseSpeed && values[speedIndex] <= maximumBaseSpeed) {
         consider(selected, food);
@@ -2092,33 +2308,41 @@ function searchConstrainedExactFood(
     for (const choice of slots[depth].choices) {
       const nextTomestoneCost = tomestoneCost + getTomestoneCost(choice.state);
       const nextRaidCost = raidCost + getRaidCost(choice.state);
-      if (!isWithinProgressionBudget(ctx, {
-        tomestoneCost: nextTomestoneCost,
-        raidCost: nextRaidCost,
-      })) continue;
+      if (
+        !isWithinProgressionBudget(ctx, {
+          tomestoneCost: nextTomestoneCost,
+          raidCost: nextRaidCost,
+        })
+      )
+        continue;
       const nextSpeed = values[speedIndex] + choice.values[speedIndex];
       if (nextSpeed > maximumBaseSpeed) continue;
       if (nextSpeed + speedSuffix[depth + 1] < requiredBaseSpeed) continue;
       let upper = Infinity;
       const neededSpeed = Math.max(0, requiredBaseSpeed - nextSpeed);
       for (let index = 0; index < duals.length; index++) {
-        upper = Math.min(upper, duals[index].intercept + dualScores[index] + choice.dualScores![index] +
-          dualSuffixes[index][depth + 1][neededSpeed]);
+        upper = Math.min(
+          upper,
+          duals[index].intercept +
+            dualScores[index] +
+            choice.dualScores![index] +
+            dualSuffixes[index][depth + 1][neededSpeed],
+        );
       }
-      const threshold = Math.log(Math.max(Number.MIN_VALUE,
-        getBestDamage() - gcdOptimizationDamageTolerance));
+      const threshold = Math.log(Math.max(Number.MIN_VALUE, getBestDamage() - gcdOptimizationDamageTolerance));
       if (upper + gcdOptimizationBoundTolerance < threshold) continue;
       for (let index = 0; index < values.length; index++) values[index] += choice.values[index];
       for (let index = 0; index < dualScores.length; index++) dualScores[index] += choice.dualScores![index];
       const nextCost = changeCost + choice.state.changeCost;
       const speedKey = Math.min(values[speedIndex], requiredBaseSpeed);
-      const key = `${model.damageIndexes.map(index => values[index]).join(',')},${speedKey};` +
+      const key =
+        `${model.damageIndexes.map((index) => values[index]).join(',')},${speedKey};` +
         `${nextTomestoneCost},${nextRaidCost}`;
       const existing = seen[depth + 1].get(key);
       if (
         existing === undefined ||
         values[speedIndex] < existing.speed ||
-        values[speedIndex] === existing.speed && nextCost < existing.cost
+        (values[speedIndex] === existing.speed && nextCost < existing.cost)
       ) {
         seen[depth + 1].set(key, { speed: values[speedIndex], cost: nextCost });
         selected.push(choice);
@@ -2142,34 +2366,38 @@ function optimizeAllGearExactlyWithSpeed(
 ): GcdOptimizationResult | undefined {
   const model = createExactDamageModel(ctx, relevantStats, slotStateSets, speedStat);
   if (model === undefined) return;
-  const baseValues = relevantStats.map(stat => ctx.baseStats[stat] ?? 0);
+  const baseValues = relevantStats.map((stat) => ctx.baseStats[stat] ?? 0);
   const speedIndex = relevantStats.indexOf(speedStat);
-  const slots: GcdExactSlot[] = slotStateSets.map(slot => ({
+  const slots: GcdExactSlot[] = slotStateSets.map((slot) => ({
     schemaIndex: slot.schemaIndex,
-    choices: slot.states.map(state => ({
+    choices: slot.states.map((state) => ({
       state,
-      values: relevantStats.map(stat => state.stats[stat] ?? 0),
+      values: relevantStats.map((stat) => state.stats[stat] ?? 0),
     })),
   }));
   const baseWeights = getExactDamageBaseWeights(model);
   const genericDuals = createDamageDuals(ctx, model, slots, baseValues, baseWeights);
-  const weightCandidates = genericDuals.map(dual => dual.weights);
-  if (!weightCandidates.some(weights => weights.every((value, index) => value === baseWeights[index]))) {
+  const weightCandidates = genericDuals.map((dual) => dual.weights);
+  if (!weightCandidates.some((weights) => weights.every((value, index) => value === baseWeights[index]))) {
     weightCandidates.push(baseWeights);
   }
-  const availableMaximumBaseSpeed = baseValues[speedIndex] + slots.reduce((total, slot) => total +
-    Math.max(...slot.choices.map(choice => choice.values[speedIndex])), 0);
-  const foods = getFoodCandidates(ctx, speedStat).map(food => ({
-    food,
-    requiredBaseSpeed: getRequiredExactBaseSpeed(ctx, speedStat, requiredSpeed, food),
-    maximumBaseSpeed: ctx.speedRange === undefined
-      ? Infinity
-      : getMaximumExactBaseSpeed(ctx, speedStat, ctx.speedRange.max, food),
-    incumbentDamage: -Infinity,
-  })).filter(search =>
-    search.requiredBaseSpeed <= search.maximumBaseSpeed &&
-    search.requiredBaseSpeed <= availableMaximumBaseSpeed &&
-    baseValues[speedIndex] <= search.maximumBaseSpeed);
+  const availableMaximumBaseSpeed =
+    baseValues[speedIndex] +
+    slots.reduce((total, slot) => total + Math.max(...slot.choices.map((choice) => choice.values[speedIndex])), 0);
+  const foods = getFoodCandidates(ctx, speedStat)
+    .map((food) => ({
+      food,
+      requiredBaseSpeed: getRequiredExactBaseSpeed(ctx, speedStat, requiredSpeed, food),
+      maximumBaseSpeed:
+        ctx.speedRange === undefined ? Infinity : getMaximumExactBaseSpeed(ctx, speedStat, ctx.speedRange.max, food),
+      incumbentDamage: -Infinity,
+    }))
+    .filter(
+      (search) =>
+        search.requiredBaseSpeed <= search.maximumBaseSpeed &&
+        search.requiredBaseSpeed <= availableMaximumBaseSpeed &&
+        baseValues[speedIndex] <= search.maximumBaseSpeed,
+    );
   if (foods.length === 0) return;
 
   let best: GcdExactBest | undefined;
@@ -2178,23 +2406,21 @@ function optimizeAllGearExactlyWithSpeed(
     if (!isWithinProgressionBudget(ctx, combined)) return;
     const stats = getFinalStats(ctx, combined, food);
     const effects = calcEffects(stats, ctx.baseStats, ctx.job, ctx.jobLevel, ctx.schema);
-    if (
-      effects === undefined ||
-      effects.gcd > ctx.targetGcd ||
-      !isSpeedWithinRange(ctx, stats[speedStat] ?? 0)
-    ) return;
+    if (effects === undefined || effects.gcd > ctx.targetGcd || !isSpeedWithinRange(ctx, stats[speedStat] ?? 0)) return;
     const changeCost = combined.changeCost + getFoodChangeCost(ctx, food);
-    if (isBetterGcdOptimization(
-      { effects, stats, changeCost, foodId: food?.id },
-      best && {
-        effects: best.effects,
-        stats: best.stats,
-        changeCost: best.changeCost,
-        foodId: best.food?.id,
-      },
-      speedStat,
-      requiredSpeed,
-    )) {
+    if (
+      isBetterGcdOptimization(
+        { effects, stats, changeCost, foodId: food?.id },
+        best && {
+          effects: best.effects,
+          stats: best.stats,
+          changeCost: best.changeCost,
+          foodId: best.food?.id,
+        },
+        speedStat,
+        requiredSpeed,
+      )
+    ) {
       best = { choices: choices.slice(), effects, stats, food, changeCost };
     }
   };
@@ -2255,13 +2481,15 @@ export function optimizeGcd(input: GcdOptimizationInput): GcdOptimizationResult 
   const ctx: GcdOptimizationContext = {
     ...input,
     schema,
-    gearById: new Map(input.gears.map(gear => [ gear.id, gear ])),
+    gearById: new Map(input.gears.map((gear) => [gear.id, gear])),
     equippedGearIdBySlot: new Map(input.equippedGearIdsBySlot),
   };
   if (
     ctx.progressionWeeks !== undefined &&
-    (ctx.mode !== 'all' || !Number.isInteger(ctx.progressionWeeks) ||
-      ctx.progressionWeeks < 0 || ctx.progressionWeeks > 10)
+    (ctx.mode !== 'all' ||
+      !Number.isInteger(ctx.progressionWeeks) ||
+      ctx.progressionWeeks < 0 ||
+      ctx.progressionWeeks > 10)
   ) {
     return { status: 'error', message: '准备周数目前仅支持 0–10 周。' };
   }
@@ -2270,12 +2498,17 @@ export function optimizeGcd(input: GcdOptimizationInput): GcdOptimizationResult 
     ctx.targetGcd < gcdOptimizationMinTargetGcd ||
     ctx.targetGcd > gcdOptimizationMaxTargetGcd
   ) {
-    return { status: 'error', message: `目标 GCD 只能在 ${gcdOptimizationMinTargetGcd.toFixed(2)}s - ${gcdOptimizationMaxTargetGcd.toFixed(2)}s 之间。` };
+    return {
+      status: 'error',
+      message: `目标 GCD 只能在 ${gcdOptimizationMinTargetGcd.toFixed(2)}s - ${gcdOptimizationMaxTargetGcd.toFixed(2)}s 之间。`,
+    };
   }
   if (
     ctx.speedRange !== undefined &&
-    (!Number.isSafeInteger(ctx.speedRange.min) || !Number.isSafeInteger(ctx.speedRange.max) ||
-      ctx.speedRange.min < 0 || ctx.speedRange.max < ctx.speedRange.min ||
+    (!Number.isSafeInteger(ctx.speedRange.min) ||
+      !Number.isSafeInteger(ctx.speedRange.max) ||
+      ctx.speedRange.min < 0 ||
+      ctx.speedRange.max < ctx.speedRange.min ||
       ctx.speedRange.max > gcdOptimizationMaxSpeed)
   ) {
     return {
@@ -2316,34 +2549,29 @@ export function optimizeGcd(input: GcdOptimizationInput): GcdOptimizationResult 
     if (allGearStates.error !== undefined) {
       return { status: 'error', message: allGearStates.error };
     }
-    const runExactSearch = () => allGearStates.guaranteedBaseSpeed >= requiredSpeed && ctx.speedRange === undefined
-      ? optimizeAllGearExactly(
-        ctx,
-        speedStat,
-        requiredSpeed,
-        relevantStats,
-        allGearStates.slotStates,
-        allGearStates.customSkipped,
-      )
-      : optimizeAllGearExactlyWithSpeed(
-        ctx,
-        speedStat,
-        requiredSpeed,
-        relevantStats,
-        allGearStates.slotStates,
-        allGearStates.customSkipped,
-      );
+    const runExactSearch = () =>
+      allGearStates.guaranteedBaseSpeed >= requiredSpeed && ctx.speedRange === undefined
+        ? optimizeAllGearExactly(
+            ctx,
+            speedStat,
+            requiredSpeed,
+            relevantStats,
+            allGearStates.slotStates,
+            allGearStates.customSkipped,
+          )
+        : optimizeAllGearExactlyWithSpeed(
+            ctx,
+            speedStat,
+            requiredSpeed,
+            relevantStats,
+            allGearStates.slotStates,
+            allGearStates.customSkipped,
+          );
     if (ctx.searchStrategy === 'exact') {
       return runExactSearch() ?? { status: 'error', message: '当前输入无法使用精确搜索。' };
     }
     try {
-      const frontier = combineAllGearStateSets(
-        ctx,
-        allGearStates.slotStates,
-        speedStat,
-        requiredSpeed,
-        relevantStats,
-      );
+      const frontier = combineAllGearStateSets(ctx, allGearStates.slotStates, speedStat, requiredSpeed, relevantStats);
       return evaluateGcdFrontier(ctx, speedStat, requiredSpeed, frontier, allGearStates.customSkipped);
     } catch (e) {
       if (e instanceof ParetoFrontierLimitError) {

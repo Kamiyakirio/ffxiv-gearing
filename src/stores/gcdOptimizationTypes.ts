@@ -62,6 +62,7 @@ export interface GcdOptimizationGearPlan {
   slot: number,
   gearId: G.GearId,
   materias?: GcdOptimizationMateriaPlan[],
+  customStats?: G.Stats,
 }
 
 export interface GcdOptimizationMateriaPlan {

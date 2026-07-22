@@ -12,7 +12,7 @@ export const Gear = mst.types
     materias: mst.types.optional(mst.types.array(Materia), []),
     customStats: mst.types.maybe(mst.types.map(mst.types.number)),
   })
-  .views(self => ({
+  .views((self) => ({
     get data() {
       if (!gearData.has(Math.abs(self.id))) throw ReferenceError(`Gear ${self.id} not exists.`);
       return gearData.get(Math.abs(self.id))! as G.Gear;
@@ -26,35 +26,65 @@ export const Gear = mst.types
       return stat;
     },
   }))
-  .views(self => ({
-    get isFood() { return false as const; },
-    get name() { return self.data.name; },
-    get level() { return self.data.level; },
-    get slot() { return self.id > 0 ? self.data.slot : -self.data.slot; },
-    get jobs() { return G.jobCategories[self.data.jobCategory]; },
-    get equipLevel() { return self.data.equipLevel; },
-    get equipLevelVariable() { return self.data.equipLevelVariable; },
-    get materiaSlot() { return self.data.materiaSlot; },
-    get materiaAdvanced() { return self.data.materiaAdvanced; },
-    get hq() { return self.data.hq; },
-    get customizable() { return self.data.customizable; },
-    get source() { return self.data.source; },
+  .views((self) => ({
+    get isFood() {
+      return false as const;
+    },
+    get name() {
+      return self.data.name;
+    },
+    get level() {
+      return self.data.level;
+    },
+    get slot() {
+      return self.id > 0 ? self.data.slot : -self.data.slot;
+    },
+    get jobs() {
+      return G.jobCategories[self.data.jobCategory];
+    },
+    get equipLevel() {
+      return self.data.equipLevel;
+    },
+    get equipLevelVariable() {
+      return self.data.equipLevelVariable;
+    },
+    get materiaSlot() {
+      return self.data.materiaSlot;
+    },
+    get materiaAdvanced() {
+      return self.data.materiaAdvanced;
+    },
+    get hq() {
+      return self.data.hq;
+    },
+    get customizable() {
+      return self.data.customizable;
+    },
+    get source() {
+      return self.data.source;
+    },
     get color(): GearColor {
       const { gearColorScheme } = self.store.setting;
       if (gearColorScheme === 'none') return 'white';
-      const { rarity, source='' } = self.data;
-      return gearColorScheme === 'source' && sourceColors[(source).slice(0, 2)] || rarityColors[rarity];
+      const { rarity, source = '' } = self.data;
+      return (gearColorScheme === 'source' && sourceColors[source.slice(0, 2)]) || rarityColors[rarity];
     },
     get syncedLevel(): number | undefined {
-      const { jobLevel, syncLevel=Infinity } = self.store;
+      const { jobLevel, syncLevel = Infinity } = self.store;
       if (syncLevel >= this.level && jobLevel >= this.equipLevel) return undefined;
       const jobLevelSyncedLevel = Math.min(this.level, G.syncLevelOfJobLevels[jobLevel]);
       return this.equipLevelVariable
         ? Math.min(syncLevel, jobLevelSyncedLevel)
-        : syncLevel < this.level ? syncLevel : jobLevelSyncedLevel;
+        : syncLevel < this.level
+          ? syncLevel
+          : jobLevelSyncedLevel;
     },
-    get caps(): G.Stats { return G.getCaps(self.data); },
-    get bareStats(): G.Stats { return self.data.stats; },
+    get caps(): G.Stats {
+      return G.getCaps(self.data);
+    },
+    get bareStats(): G.Stats {
+      return self.data.stats;
+    },
     get materiaStats(): G.Stats {
       const stats: G.Stats = {};
       for (const materia of self.materias) {
@@ -67,7 +97,7 @@ export const Gear = mst.types
     },
     get stats(): G.Stats {
       const stats: G.Stats = {};
-      for (const [ stat, value ] of Object.entries(this.bareStats) as G.StatPairs) {
+      for (const [stat, value] of Object.entries(this.bareStats) as G.StatPairs) {
         stats[self.concretizeStat(stat)] = value;
       }
       if (this.customizable) {
@@ -75,16 +105,16 @@ export const Gear = mst.types
       }
       if (this.syncedLevel !== undefined) {
         const caps = G.getCaps(self.data, this.syncedLevel);
-        for (const [ stat, value ] of Object.entries(stats) as G.StatPairs) {
+        for (const [stat, value] of Object.entries(stats) as G.StatPairs) {
           stats[stat] = Math.min(value, caps[stat]!);
         }
         if (this.syncedLevel === 700 && self.data.occultStats !== undefined) {
-          for (const [ stat, value ] of Object.entries(self.data.occultStats) as G.StatPairs) {
+          for (const [stat, value] of Object.entries(self.data.occultStats) as G.StatPairs) {
             stats[self.concretizeStat(stat)]! += value;
           }
         }
       } else if (this.materiaSlot > 0) {
-        for (const [ stat, value ] of Object.entries(this.materiaStats) as G.StatPairs) {
+        for (const [stat, value] of Object.entries(this.materiaStats) as G.StatPairs) {
           const base = stats[stat] ?? 0;
           stats[stat] = Math.min(base + value, Math.max(base, this.caps[stat]));
         }
@@ -124,7 +154,7 @@ export const Gear = mst.types
       return self.customStats !== undefined && self.customStats.size > 0;
     },
   }))
-  .actions(self => ({
+  .actions((self) => ({
     setCustomStat(stat: G.Stat, value: number) {
       if (value > 0) {
         self.customStats!.set(stat, value <= G.customStatMax ? value : G.customStatMax);
@@ -132,10 +162,18 @@ export const Gear = mst.types
         self.customStats!.delete(stat);
       }
     },
+    setCustomStats(stats: G.Stats) {
+      self.customStats!.clear();
+      for (const [stat, value] of Object.entries(stats) as G.StatPairs) {
+        if (value > 0) {
+          self.customStats!.set(stat, value <= G.customStatMax ? value : G.customStatMax);
+        }
+      }
+    },
     initialize() {
       const materiaSlot = self.materiaAdvanced ? 5 : self.materiaSlot;
       if (self.materias.length > materiaSlot) {
-        self.materias.splice(materiaSlot, 5);  // 5 means all
+        self.materias.splice(materiaSlot, 5); // 5 means all
       }
       if (self.materias.length < materiaSlot) {
         self.materias.push(...new Array(materiaSlot - self.materias.length).fill({}));
@@ -148,7 +186,7 @@ export const Gear = mst.types
       mobx.when(() => gearData.has(Math.abs(self.id)), this.initialize);
     },
   }))
-  .postProcessSnapshot(snapshot => {
+  .postProcessSnapshot((snapshot) => {
     if (snapshot.customStats === undefined) {
       delete snapshot.customStats;
     }
@@ -165,9 +203,9 @@ const rarityColors: { [index: number]: GearColor } = {
 
 // noinspection NonAsciiCharacters
 const sourceColors: { [index: string]: GearColor } = {
-  '点数': 'red',
-  '天书': 'purple',
-  '绝境': 'purple',
+  点数: 'red',
+  天书: 'purple',
+  绝境: 'purple',
 };
 
 export interface IGear extends mst.Instance<typeof Gear> {}

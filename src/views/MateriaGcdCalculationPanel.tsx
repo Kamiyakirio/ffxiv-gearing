@@ -402,6 +402,14 @@ const MateriaGcdOptimizationResultView = mobxReact.observer<{
       </div>
     );
   }
+  const customStatPlans = result.plan.flatMap((plan) => {
+    if (plan.customStats === undefined) return [];
+    const gear = store.gears.get(plan.gearId.toString()) as IGear | undefined;
+    const stats = (Object.entries(plan.customStats) as G.StatPairs)
+      .map(([stat, value]) => `${G.statNames[stat]} ${value}`)
+      .join(' / ');
+    return [`${gear?.name ?? '自定义武器'}：${stats}`];
+  });
   return (
     <div className="materia-gcd-optimization_result">
       <table className="materia-gcd-optimization_summary table">
@@ -427,6 +435,9 @@ const MateriaGcdOptimizationResultView = mobxReact.observer<{
           </tr>
         </tbody>
       </table>
+      {customStatPlans.map((plan) => (
+        <div className="materia-gcd-optimization_note" key={plan}>{`自动配置 ${plan}`}</div>
+      ))}
       {result.customSkipped && (
         <div className="materia-gcd-optimization_note">自动选择装备时已跳过未配置自定义属性的装备。</div>
       )}
@@ -441,4 +452,3 @@ const MateriaGcdOptimizationResultView = mobxReact.observer<{
     </div>
   );
 });
-
